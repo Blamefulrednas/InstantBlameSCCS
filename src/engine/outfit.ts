@@ -139,7 +139,7 @@ export function avoidDaylightShavingsHelm(): boolean {
   );
 }
 
-export function baseOutfit(allowAttackingFamiliars = true): OutfitSpec {
+export function baseOutfit(allowAttackingFamiliars = true, cookbookbatWanted = false): OutfitSpec {
   // Only try equipping/nag LOV Epaulettes if we are done with the LOV tunnel
   const lovTunnelCompleted = get("_loveTunnelUsed") || !get("loveTunnelAvailable");
 
@@ -152,7 +152,7 @@ export function baseOutfit(allowAttackingFamiliars = true): OutfitSpec {
       have($item`Cincho de Mayo`) && get("_cinchUsed", 0) < 95 && !get("instant_saveCinch", false)
         ? $item`Cincho de Mayo`
         : undefined,
-    familiar: chooseFamiliar(allowAttackingFamiliars),
+    familiar: cookbookbatWanted ? $familiar`Cookbookbat` : chooseFamiliar(allowAttackingFamiliars),
     modifier: "0.25 mys, 0.33 ML, -equip tinsel tights, -equip wad of used tape",
     avoid: [
       ...sugarItemsAboutToBreak(),

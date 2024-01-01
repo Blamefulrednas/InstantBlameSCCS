@@ -1,10 +1,11 @@
-import { buy, create, Effect, print, use } from "kolmafia";
+import { buy, create, Effect, itemAmount, print, use, useSkill } from "kolmafia";
 import {
   $coinmaster,
   $effect,
   $effects,
   $item,
   $items,
+  $skill,
   CommunityService,
   ensureEffect,
   get,
@@ -14,6 +15,7 @@ import {
 } from "libram";
 import { Quest } from "../engine/task";
 import { logTestSetup, tryAcquiringEffect } from "../lib";
+import { forbiddenEffects } from "../resources";
 
 export const HPQuest: Quest = {
   name: "HP",
@@ -184,6 +186,37 @@ export const MoxieQuest: Quest = {
       limit: { tries: 1 },
     },
     {
+      name: "Loathing Idol Microphone Moxie",
+      completed: () =>
+        have($effect`Poppy Performance`) ||
+        forbiddenEffects.includes($effect`Poppy Performance`) ||
+        have($item`Loathing Idol Microphone (75% charged)`) ||
+        have($item`Loathing Idol Microphone (50% charged)`),
+      do: (): void => {
+        if (!have($item`Loathing Idol Microphone`)) {
+          buy($coinmaster`Mr. Store 2002`, 1, $item`Loathing Idol Microphone`);
+        }
+        withChoice(1505, 1, () => use($item`Loathing Idol Microphone`));
+      },
+      limit: { tries: 1 },
+    },
+    {
+      name: "acquire & use rhinestone",
+      completed: () =>
+        //get("_acquireRhinestonesUsed", 0) < 1 ||
+        $skill`Acquire Rhinestones`.dailylimit === 0,
+      do: (): void => {
+        if (!have($item`rhinestone`)) {
+          useSkill($skill`Acquire Rhinestones`, 1);
+        }
+        if (have($item`rhinestone`)) {
+          use($item`rhinestone`, itemAmount($item`rhinestone`));
+        }
+      },
+      limit: { tries: 1 },
+    },
+
+    {
       name: "Test",
       completed: () => CommunityService.Moxie.isDone(),
       prepare: (): void => {
@@ -213,6 +246,11 @@ export const MoxieQuest: Quest = {
       do: (): void => {
         const maxTurns = get("instant_moxTestTurnLimit", 5);
         const testTurns = CommunityService.Moxie.actualCost();
+
+        if (have($skill`Aug. 6th: Fresh Breath Day!`) && CommunityService.Moxie.actualCost() > 1) {
+          tryAcquiringEffect($effect`Fresh Breath`);
+        }
+
         if (testTurns > maxTurns) {
           print(`Expected to take ${testTurns}, which is more than ${maxTurns}.`, "red");
           print("Either there was a bug, or you are under-prepared for this test", "red");

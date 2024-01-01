@@ -209,7 +209,7 @@ export const RunStartQuest: Quest = {
         if (storageAmount($item`borrowed time`) === 0 && !have($item`borrowed time`)) {
           print("Uh oh! You do not seem to have a borrowed time in Hagnk's", "red");
           print(
-            "Try to purchase one from the mall with your meat from Hagnk's before re-running instantsccs",
+            "Try to purchase one from the mall with your meat from Hagnk's before re-running blamesccs",
             "red"
           );
         }

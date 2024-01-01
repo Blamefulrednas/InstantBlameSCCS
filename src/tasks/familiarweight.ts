@@ -98,6 +98,7 @@ export const FamiliarWeightQuest: Quest = {
           $effect`Puzzle Champ`,
           $effect`Robot Friends`,
           $effect`Shortly Stacked`,
+          $effect`Party Soundtrack`,
         ];
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef, true));
 

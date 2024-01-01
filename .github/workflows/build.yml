@@ -1,4 +1,4 @@
-name: Build instantsccs
+name: Build blamesccs
 
 on:
   push:

@@ -9,12 +9,7 @@ import {
   userConfirm,
   visitUrl,
 } from "kolmafia";
-import {
-  checkGithubVersion,
-  computeCombatFrequency,
-  convertMilliseconds,
-  simpleDateDiff,
-} from "./lib";
+import { computeCombatFrequency, convertMilliseconds, simpleDateDiff } from "./lib";
 import { get, set, sinceKolmafiaRevision } from "libram";
 import { Engine } from "./engine/engine";
 import { Args, getTasks } from "grimoire-kolmafia";
@@ -35,7 +30,7 @@ import { checkResources } from "./resources";
 
 const timeProperty = "fullday_elapsedTime";
 
-export const args = Args.create("InstantSCCS", "An automated low-shiny SCCS script.", {
+export const args = Args.create("BlameSCCS", "An automated low-shiny SCCS script.", {
   confirm: Args.boolean({
     help: "If the user must confirm execution of each task.",
     default: false,
@@ -49,7 +44,7 @@ export const args = Args.create("InstantSCCS", "An automated low-shiny SCCS scri
 
 export function main(command?: string): void {
   sinceKolmafiaRevision(27637);
-  checkGithubVersion();
+  // checkGithubVersion();
 
   Args.fill(args, command);
   if (args.help) {

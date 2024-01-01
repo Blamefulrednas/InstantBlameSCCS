@@ -2224,9 +2224,9 @@ graceful-fs@^4.2.9:
   integrity sha512-9ByhssR2fPVsNZj478qUUbKfmL0+t5BDVyjShtyZZLiK7ZDAArFFfopyOTj0M05wE2tJPisA4iTnnXl2YoPvOA==
 
 grimoire-kolmafia@^0.3.18:
-  version "0.3.18"
-  resolved "https://registry.yarnpkg.com/grimoire-kolmafia/-/grimoire-kolmafia-0.3.18.tgz#363e5a5ca7fcb2c81a325c51ca100236491e4e70"
-  integrity sha512-+zVTiIPlS2MTNQcBNfto1C3g0B/8L00k+1HcUd09Ui3QwoCkdyA+0owMfbWUgfZxKHgDarPOdoVcLWRN12poag==
+  version "0.3.25"
+  resolved "https://pkgs.dev.azure.com/houseofhr/Accent/_packaging/fit/npm/registry/grimoire-kolmafia/-/grimoire-kolmafia-0.3.25.tgz#be46c7b8ee0e550e6346ea66d5fe171d06035889"
+  integrity sha1-vkbHuO4OVQ5jRupm1f4XHQYDWIk=
   dependencies:
     core-js "^3.16.4"
 
@@ -2285,8 +2285,8 @@ has@^1.0.3:
 
 html-entities@^2.4.0:
   version "2.4.0"
-  resolved "https://registry.yarnpkg.com/html-entities/-/html-entities-2.4.0.tgz#edd0cee70402584c8c76cc2c0556db09d1f45061"
-  integrity sha512-igBTJcNNNhvZFRtm8uA6xMY6xYleeDwn3PeBCkDz7tHttv4F2hsDI2aPgNERWzvRcNYHNT3ymRaQzllmXj4YsQ==
+  resolved "https://pkgs.dev.azure.com/houseofhr/Accent/_packaging/fit/npm/registry/html-entities/-/html-entities-2.4.0.tgz#edd0cee70402584c8c76cc2c0556db09d1f45061"
+  integrity sha1-7dDO5wQCWEyMdswsBVbbCdH0UGE=
 
 human-signals@^2.1.0:
   version "2.1.0"
@@ -2585,9 +2585,9 @@ kind-of@^6.0.0, kind-of@^6.0.2:
   integrity sha512-dcS1ul+9tmeD95T+x28/ehLgd9mENa3LsvDTtzm3vyBEO7RPptvAD+t44WVXaUjTBRcrpFeFlC8WCruUR456hw==
 
 kolmafia@^5.27637.0:
-  version "5.27637.0"
-  resolved "https://registry.yarnpkg.com/kolmafia/-/kolmafia-5.27637.0.tgz#736e9d10b7c3519b768cb49064059e5ae58a4d08"
-  integrity sha512-PHuMdZdqrWUHoaVJjG3brIBJd5eVewzD7z4eJ2OlEEWawmWw21hn5nMMzJ4HZ1f99224136uLfHL/uIEpRhU/g==
+  version "5.27757.0"
+  resolved "https://pkgs.dev.azure.com/houseofhr/Accent/_packaging/fit/npm/registry/kolmafia/-/kolmafia-5.27757.0.tgz#c625df946f2da659f502c1813a1e4dc9f09e6c09"
+  integrity sha1-xiXflG8tpln1AsGBOh5NyfCebAk=
 
 levn@^0.4.1:
   version "0.4.1"
@@ -2598,9 +2598,9 @@ levn@^0.4.1:
     type-check "~0.4.0"
 
 libram@^0.8.13:
-  version "0.8.13"
-  resolved "https://registry.yarnpkg.com/libram/-/libram-0.8.13.tgz#6224a3eb7bf24aa7b61a4d71d72a840e82683619"
-  integrity sha512-iup0jxn11Ahsk/3r+YqJlgqf9LRGBbrDnpWBP/ERC3apmLyBQwNp8CQ6ptvWt5i1YPGS8LC4Q8azwHaNqo5vHw==
+  version "0.8.18"
+  resolved "https://pkgs.dev.azure.com/houseofhr/Accent/_packaging/fit/npm/registry/libram/-/libram-0.8.18.tgz#c160bef67029433e6f11e0a11c6abde82991c5c5"
+  integrity sha1-wWC+9nApQz5vEeChHGq96CmRxcU=
   dependencies:
     html-entities "^2.4.0"
 

@@ -71,26 +71,26 @@ export const testModifiers = new Map([
   [CommunityService.CoilWire, []],
 ]);
 
-export function checkGithubVersion(): void {
-  const gitBranches: { name: string; commit: { sha: string } }[] = JSON.parse(
-    visitUrl(`https://api.github.com/repos/Pantocyclus/InstantSCCS/branches`)
-  );
-  const releaseBranch = gitBranches.find((branchInfo) => branchInfo.name === "release");
-  const releaseSHA = releaseBranch?.commit.sha ?? "Not Found";
-  const localBranch = gitInfo("Pantocyclus-instantsccs-release");
-  const localSHA = localBranch.commit;
-  if (releaseSHA === localSHA) {
-    print("InstantSCCS is up to date!", "green");
-  } else {
-    print(
-      `InstantSCCS is out of date - your version was last updated on ${localBranch.last_changed_date}.`,
-      "red"
-    );
-    print("Please run 'git update'!", "red");
-    print(`Local Version: ${localSHA}.`);
-    print(`Release Version: ${releaseSHA}`);
-  }
-}
+// export function checkGithubVersion(): void {
+//   const gitBranches: { name: string; commit: { sha: string } }[] = JSON.parse(
+//     visitUrl(`https://api.github.com/repos/Pantocyclus/InstantSCCS/branches`)
+//   );
+//   const releaseBranch = gitBranches.find((branchInfo) => branchInfo.name === "release");
+//   const releaseSHA = releaseBranch?.commit.sha ?? "Not Found";
+//   const localBranch = gitInfo("Pantocyclus-instantsccs-release");
+//   const localSHA = localBranch.commit;
+//   if (releaseSHA === localSHA) {
+//     print("InstantSCCS is up to date!", "green");
+//   } else {
+//     print(
+//       `InstantSCCS is out of date - your version was last updated on ${localBranch.last_changed_date}.`,
+//       "red"
+//     );
+//     print("Please run 'git update'!", "red");
+//     print(`Local Version: ${localSHA}.`);
+//     print(`Release Version: ${releaseSHA}`);
+//   }
+// }
 
 export function simpleDateDiff(t1: string, t2: string): number {
   // Returns difference in milliseconds

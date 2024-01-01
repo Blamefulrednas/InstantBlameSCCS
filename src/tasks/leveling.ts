@@ -101,7 +101,11 @@ import {
 const useCinch = !get("instant_saveCinch", false);
 const baseBoozes = $items`bottle of rum, boxed wine, bottle of gin, bottle of vodka, bottle of tequila, bottle of whiskey`;
 const freeFightMonsters: Monster[] = $monsters`Witchess Bishop, Witchess King, Witchess Witch, sausage goblin, Eldritch Tentacle`;
-const craftedCBBFoods: Item[] = $items`honey bun of Boris, roasted vegetable of Jarlsberg, Pete's rich ricotta, plain calzone`;
+const craftedCBBFoods: Item[] = $items`honey bun of Boris, roasted vegetable of Jarlsberg, plain calzone`;
+const craftedCBBFoodsPost: Item[] = $items`Pete's rich ricotta`;
+const craftedCBBEffectsPost: Effect[] = craftedCBBFoodsPost.map((it) =>
+  effectModifier(it, "effect")
+);
 const craftedCBBEffects: Effect[] = craftedCBBFoods.map((it) => effectModifier(it, "effect"));
 let triedCraftingCBBFoods = false;
 const usefulEffects: Effect[] = [
@@ -201,8 +205,8 @@ export function bestShadowRift(): Location {
 }
 
 function sendAutumnaton(): void {
-  if (AutumnAton.availableLocations().includes(bestShadowRift()) && have($item`autumn-aton`))
-    AutumnAton.sendTo(bestShadowRift());
+  if (/*AutumnAton.availableLocations().includes(bestShadowRift()) &&*/ have($item`autumn-aton`))
+    cliExecute("autumnaton send The Sleazy Back Alley");
 }
 
 function sellMiscellaneousItems(): void {
@@ -270,21 +274,21 @@ export const LevelingQuest: Quest = {
       completed: () => have($effect`Inscrutable Gaze`) || !have($skill`Inscrutable Gaze`),
       do: (): void => ensureEffect($effect`Inscrutable Gaze`),
     },
-    {
-      name: "Hot in Herre",
-      completed: () =>
-        have($effect`Hot in Herre`) ||
-        !have($item`2002 Mr. Store Catalog`) ||
-        get("availableMrStore2002Credits", 0) <= get("instant_saveCatalogCredits", 0) ||
-        forbiddenEffects.includes($effect`Hot in Herre`),
-      do: (): void => {
-        if (!have($item`Charter: Nellyville`)) {
-          buy($coinmaster`Mr. Store 2002`, 1, $item`Charter: Nellyville`);
-        }
-        use($item`Charter: Nellyville`, 1);
-      },
-      limit: { tries: 3 },
-    },
+    // {
+    //   name: "Hot in Herre",
+    //   completed: () =>
+    //     have($effect`Hot in Herre`) ||
+    //     !have($item`2002 Mr. Store Catalog`) ||
+    //     get("availableMrStore2002Credits", 0) <= get("instant_saveCatalogCredits", 0) ||
+    //     forbiddenEffects.includes($effect`Hot in Herre`),
+    //   do: (): void => {
+    //     if (!have($item`Charter: Nellyville`)) {
+    //       buy($coinmaster`Mr. Store 2002`, 1, $item`Charter: Nellyville`);
+    //     }
+    //     use($item`Charter: Nellyville`, 1);
+    //   },
+    //   limit: { tries: 3 },
+    // },
     {
       name: "Crimbo Candy",
       completed: () =>
@@ -318,7 +322,7 @@ export const LevelingQuest: Quest = {
           print("Uh oh! You do not seem to have a Deep Dish of Legend in Hagnk's", "red");
           print("Consider pulling something to make up for the turngen and 300%mus,", "red");
           print(
-            "then type 'set _instant_skipDeepDishOfLegend=true' before re-running instantsccs",
+            "then type 'set _instant_skipDeepDishOfLegend=true' before re-running blamesccs",
             "red"
           );
         }
@@ -343,7 +347,7 @@ export const LevelingQuest: Quest = {
             "red"
           );
           print(
-            "then type 'set _instant_skipCalzoneOfLegend=true' before re-running instantsccs",
+            "then type 'set _instant_skipCalzoneOfLegend=true' before re-running blamesccs",
             "red"
           );
         }
@@ -365,7 +369,7 @@ export const LevelingQuest: Quest = {
           print("Uh oh! You do not seem to have a Pizza of Legend in Hagnk's", "red");
           print("Consider pulling something to make up for the turngen and 300%mox,", "red");
           print(
-            "then type 'set _instant_skipPizzaOfLegend=true' before re-running instantsccs",
+            "then type 'set _instant_skipPizzaOfLegend=true' before re-running blamesccs",
             "red"
           );
         }
@@ -386,7 +390,7 @@ export const LevelingQuest: Quest = {
             "red"
           );
           print(
-            "Try to purchase one from the mall with your meat from Hagnk's before re-running instantsccs",
+            "Try to purchase one from the mall with your meat from Hagnk's before re-running blamesccs",
             "red"
           );
         }
@@ -460,9 +464,7 @@ export const LevelingQuest: Quest = {
     },
     {
       name: "Restore mp",
-      completed: () =>
-        get("timesRested") >= totalFreeRests() - get("instant_saveFreeRests", 0) ||
-        myMp() >= Math.min(200, myMaxmp()),
+      completed: () => get("timesRested") >= 0,
       prepare: (): void => {
         if (have($item`Newbiesport™ tent`)) use($item`Newbiesport™ tent`);
       },
@@ -682,6 +684,10 @@ export const LevelingQuest: Quest = {
         if (!have($effect`Everything Looks Red`) && !have($item`red rocket`)) {
           if (myMeat() >= 250) buy($item`red rocket`, 1);
         }
+        if (!have($effect`Everything Looks Blue`) && !have($item`blue rocket`)) {
+          if (myMeat() < 250) throw new Error("Insufficient Meat to purchase blue rocket!");
+          buy($item`blue rocket`, 1);
+        }
       },
       completed: () => have($effect`Everything Looks Blue`) || haveCBBIngredients(false),
       do: powerlevelingLocation(), // if your powerleveling location is the NEP you don't immediately get the MP regen
@@ -739,6 +745,10 @@ export const LevelingQuest: Quest = {
         if (!have($effect`Everything Looks Red`) && !have($item`red rocket`)) {
           if (myMeat() >= 250) buy($item`red rocket`, 1);
         }
+        if (!have($effect`Everything Looks Blue`) && !have($item`blue rocket`)) {
+          if (myMeat() < 250) throw new Error("Insufficient Meat to purchase blue rocket!");
+          buy($item`blue rocket`, 1);
+        }
       },
       completed: () =>
         have($item`Rufus's shadow lodestone`) ||
@@ -747,10 +757,11 @@ export const LevelingQuest: Quest = {
       do: bestShadowRift(),
       combat: new CombatStrategy().macro(
         Macro.tryItem($item`red rocket`)
-          .trySkill($skill`Recall Facts: %phylum Circadian Rhythms`)
-          .default()
+          .tryItem($item`blue rocket`)
+          .default(useCinch)
       ),
       outfit: baseOutfit,
+      weapon: $item`candy cane sword cane`,
       post: (): void => {
         if (have(rufusTarget() as Item)) {
           withChoice(1498, 1, () => use($item`closed-circuit pay phone`));
@@ -925,9 +936,7 @@ export const LevelingQuest: Quest = {
     {
       name: "Restore cinch",
       completed: () =>
-        get("timesRested") >= totalFreeRests() - get("instant_saveFreeRests", 0) ||
-        get("_cinchUsed", 0) <= 95 ||
-        !useCinch,
+        get("timesRested") >= totalFreeRests() || get("_cinchUsed", 0) <= 40 || !useCinch,
       prepare: (): void => {
         if (have($item`Newbiesport™ tent`)) use($item`Newbiesport™ tent`);
       },
@@ -990,7 +999,7 @@ export const LevelingQuest: Quest = {
         !have($item`backup camera`) ||
         !freeFightMonsters.includes(get("lastCopyableMonster") ?? $monster.none) ||
         get("_backUpUses") >= 11 - clamp(get("instant_saveBackups", 0), 0, 11) ||
-        myBasestat($stat`Mysticality`) >= 190, // no longer need to back up Witchess Kings
+        myBasestat($stat`Mysticality`) >= 220, // no longer need to back up Witchess Kings
       do: $location`The Dire Warren`,
       combat: new CombatStrategy().macro(
         Macro.trySkill($skill`Back-Up to your Last Enemy`).default(useCinch)
@@ -1095,7 +1104,13 @@ export const LevelingQuest: Quest = {
       },
       completed: () => get("_speakeasyFreeFights", 0) >= 3 || !get("ownsSpeakeasy"),
       do: $location`An Unusually Quiet Barroom Brawl`,
-      combat: new CombatStrategy().macro(Macro.default()),
+
+      combat: new CombatStrategy().macro(
+        Macro.if_(
+          $monster`goblin flapper`,
+          Macro.trySkill($skill`Fire Extinguisher: Polar Vortex`).default()
+        ).default()
+      ),
       outfit: baseOutfit,
       limit: { tries: 3 },
       post: (): void => {
@@ -1103,29 +1118,29 @@ export const LevelingQuest: Quest = {
         sellMiscellaneousItems();
       },
     },
-    {
-      name: "God Lobster",
-      prepare: (): void => {
-        restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
-        unbreakableUmbrella();
-        usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
-        restoreMp(50);
-      },
-      completed: () => get("_godLobsterFights") >= 3 || !have($familiar`God Lobster`),
-      do: () => visitUrl("main.php?fightgodlobster=1"),
-      combat: new CombatStrategy().macro(Macro.default(useCinch)),
-      choices: { 1310: () => (have($item`God Lobster's Ring`) ? 2 : 3) }, // Get xp on last fight
-      outfit: () => ({
-        ...baseOutfit(),
-        famequip: $items`God Lobster's Ring, God Lobster's Scepter`,
-        familiar: $familiar`God Lobster`,
-      }),
-      limit: { tries: 3 },
-      post: (): void => {
-        sendAutumnaton();
-        sellMiscellaneousItems();
-      },
-    },
+    // {
+    //   name: "God Lobster",
+    //   prepare: (): void => {
+    //     restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
+    //     unbreakableUmbrella();
+    //     usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
+    //     restoreMp(50);
+    //   },
+    //   completed: () => get("_godLobsterFights") >= 3 || !have($familiar`God Lobster`),
+    //   do: () => visitUrl("main.php?fightgodlobster=1"),
+    //   combat: new CombatStrategy().macro(Macro.default(useCinch)),
+    //   choices: { 1310: () => (have($item`God Lobster's Ring`) ? 2 : 3) }, // Get xp on last fight
+    //   outfit: () => ({
+    //     ...baseOutfit(),
+    //     famequip: $items`God Lobster's Ring, God Lobster's Scepter`,
+    //     familiar: $familiar`God Lobster`,
+    //   }),
+    //   limit: { tries: 3 },
+    //   post: (): void => {
+    //     sendAutumnaton();
+    //     sellMiscellaneousItems();
+    //   },
+    // },
     {
       name: "Eldritch Tentacle",
       prepare: (): void => {
@@ -1199,7 +1214,7 @@ export const LevelingQuest: Quest = {
     {
       name: "Powerlevel",
       completed: () =>
-        myBasestat($stat`Mysticality`) >= targetBaseMyst - targetBaseMystGap &&
+        myBasestat($stat`Mysticality`) >= 165 &&
         (haveCBBIngredients(false) ||
           overlevelled() ||
           craftedCBBEffects.some((ef) => have(ef)) ||
@@ -1213,8 +1228,14 @@ export const LevelingQuest: Quest = {
         garbageShirt();
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
         restoreMp(50);
+        if (get("_cinchUsed", 0) >= 60 && get("timesRested") < totalFreeRests()) {
+          visitUrl("campground.php?action=rest");
+        }
         if (!have($effect`Everything Looks Red`) && !have($item`red rocket`)) {
           if (myMeat() >= 250) buy($item`red rocket`, 1);
+        }
+        if (!have($effect`Everything Looks Blue`) && !have($item`blue rocket`)) {
+          if (myMeat() >= 250) buy($item`blue rocket`, 1);
         }
       },
       outfit: baseOutfit,
@@ -1227,6 +1248,7 @@ export const LevelingQuest: Quest = {
       },
       combat: new CombatStrategy().macro(
         Macro.tryItem($item`red rocket`)
+          .tryItem($item`blue rocket`)
           .trySkill($skill`Bowl Sideways`)
           .trySkill($skill`Recall Facts: %phylum Circadian Rhythms`)
           .default(useCinch)
@@ -1256,9 +1278,8 @@ export const LevelingQuest: Quest = {
     {
       name: "Craft and Eat CBB Foods",
       after: ["Powerlevel"],
-      completed: () =>
-        craftedCBBEffects.every((ef) => have(ef) || forbiddenEffects.includes(ef)) ||
-        triedCraftingCBBFoods,
+      completed: () => craftedCBBEffects.every((ef) => have(ef) || forbiddenEffects.includes(ef)),
+
       do: (): void => {
         craftedCBBFoods.forEach((it) => {
           const ef = effectModifier(it, "effect");
@@ -1300,6 +1321,7 @@ export const LevelingQuest: Quest = {
       do: (): void => {
         tryAcquiringEffect($effect`Favored by Lyle`);
         tryAcquiringEffect($effect`Starry-Eyed`);
+        wishFor($effect`A Contender`);
       },
       limit: { tries: 1 },
     },
@@ -1405,7 +1427,7 @@ export const LevelingQuest: Quest = {
     {
       name: "Witchess King (Locket)",
       prepare: (): void => {
-        restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
+        restoreHp(myMaxhp());
         unbreakableUmbrella();
         garbageShirt();
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
@@ -1453,15 +1475,15 @@ export const LevelingQuest: Quest = {
           !have($item`latte lovers member's mug`) ||
           get("_latteRefillsUsed") >= 3
         )
-          return baseOutfit();
+          return baseOutfit(true);
         else
           return {
-            ...baseOutfit(),
+            ...baseOutfit(true),
             offhand: $item`latte lovers member's mug`,
           };
       },
       completed: () =>
-        myBasestat($stat`Mysticality`) >= targetBaseMyst &&
+        myBasestat($stat`Mysticality`) >= 213 &&
         (get("_shatteringPunchUsed") >= 3 || !have($skill`Shattering Punch`)) &&
         (get("_gingerbreadMobHitUsed") || !have($skill`Gingerbread Mob Hit`)) &&
         (haveCBBIngredients(true) || overlevelled()),
@@ -1471,6 +1493,7 @@ export const LevelingQuest: Quest = {
           .trySkill($skill`Cincho: Confetti Extravaganza`)
           .trySkill($skill`Gulp Latte`)
           .trySkill($skill`Recall Facts: %phylum Circadian Rhythms`)
+          .tryItem($item`groveling gravel`)
           .trySkill($skill`Chest X-Ray`)
           .trySkill($skill`Shattering Punch`)
           .trySkill($skill`Gingerbread Mob Hit`)
@@ -1510,6 +1533,22 @@ export const LevelingQuest: Quest = {
         refillLatte();
       },
       limit: { tries: 20 },
+    },
+    {
+      name: "Craft and Eat CBB Foods Post",
+      after: ["Free Kills and More Fights"],
+      completed: () =>
+        craftedCBBEffectsPost.every((ef) => have(ef) || forbiddenEffects.includes(ef)),
+      do: (): void => {
+        craftedCBBFoodsPost.forEach((it) => {
+          const ef = effectModifier(it, "effect");
+          if (!have(ef) && !forbiddenEffects.includes(ef)) {
+            if (!have(it)) create(it, 1);
+            eat(it, 1);
+          }
+        });
+      },
+      limit: { tries: 1 },
     },
   ],
 };

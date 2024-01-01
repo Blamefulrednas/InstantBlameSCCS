@@ -295,15 +295,19 @@ export const BoozeDropQuest: Quest = {
     {
       name: "Loathing Idol Microphone",
       completed: () =>
-        have($effect`Spitting Rhymes`) ||
-        !have($item`2002 Mr. Store Catalog`) ||
-        get("availableMrStore2002Credits", 0) <= get("instant_saveCatalogCredits", 0) ||
-        forbiddenEffects.includes($effect`Spitting Rhymes`),
+        have($effect`Spitting Rhymes`) || forbiddenEffects.includes($effect`Spitting Rhymes`),
       do: (): void => {
-        if (!have($item`Loathing Idol Microphone`)) {
+        if (
+          !have($item`Loathing Idol Microphone`) &&
+          !have($item`Loathing Idol Microphone (75% charged)`)
+        ) {
           buy($coinmaster`Mr. Store 2002`, 1, $item`Loathing Idol Microphone`);
         }
-        withChoice(1505, 3, () => use($item`Loathing Idol Microphone`));
+        if (have($item`Loathing Idol Microphone`)) {
+          withChoice(1505, 3, () => use($item`Loathing Idol Microphone`));
+        } else {
+          withChoice(1505, 3, () => use($item`Loathing Idol Microphone (75% charged)`));
+        }
       },
       limit: { tries: 1 },
     },
