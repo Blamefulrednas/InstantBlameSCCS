@@ -1,5 +1,8 @@
 import {
+  chew,
   cliExecute,
+  drink,
+  eat,
   Effect,
   equip,
   equippedItem,
@@ -9,21 +12,26 @@ import {
   haveEffect,
   haveEquipped,
   holiday,
+  inHardcore,
   Item,
   itemAmount,
   monkeyPaw,
   mpCost,
   myBasestat,
   myBuffedstat,
+  myClass,
   myLevel,
   myMaxhp,
   myMp,
+  myPrimestat,
   print,
   restoreMp,
   retrieveItem,
   retrievePrice,
   Skill,
+  storageAmount,
   sweetSynthesis,
+  takeStorage,
   toInt,
   toItem,
   toSkill,
@@ -33,6 +41,7 @@ import {
   visitUrl,
 } from "kolmafia";
 import {
+  $class,
   $effect,
   $familiar,
   $item,
@@ -42,20 +51,29 @@ import {
   $skills,
   $slot,
   $stat,
+  Clan,
   CombatLoversLocket,
   CommunityService,
   get,
   getKramcoWandererChance,
   have,
+  haveInCampground,
+  maxBy,
   set,
   sumNumbers,
   Witchess,
 } from "libram";
 import { printModtrace } from "libram/dist/modifier";
 import { forbiddenEffects } from "./resources";
-import { mainStat } from "./combat";
 
 export const startingClan = getClanName();
+export const motherSlimeClan = Clan.getWhitelisted().find(
+  (c) => c.name.toLowerCase() === get("instant_motherSlimeClan", "").toLowerCase(),
+)
+  ? get("instant_motherSlimeClan", "")
+  : Clan.getWhitelisted().find((c) => c.name.toLowerCase() === "csloopers unite")
+    ? "CSLoopers Unite"
+    : "";
 
 export const testModifiers = new Map([
   [CommunityService.HP, ["Maximum HP", "Maximum HP Percent", "Muscle", "Muscle Percent"]],
@@ -125,13 +143,13 @@ export function convertMilliseconds(milliseconds: number): string {
 function logRelevantStats(whichTest: CommunityService): void {
   if (
     [CommunityService.Muscle, CommunityService.Mysticality, CommunityService.Moxie].includes(
-      whichTest
+      whichTest,
     )
   ) {
     const testStat = toStat(whichTest.statName);
     const statString = testStat.toString().slice(0, 3);
     print(
-      `Base ${statString}: ${myBasestat(testStat)}; Buffed ${statString}: ${myBuffedstat(testStat)}`
+      `Base ${statString}: ${myBasestat(testStat)}; Buffed ${statString}: ${myBuffedstat(testStat)}`,
     );
   } else if (whichTest === CommunityService.HP) {
     print(`Buffed Mus: ${myBuffedstat($stat`Muscle`)}; HP: ${myMaxhp()};`);
@@ -148,10 +166,15 @@ export function logTestSetup(whichTest: CommunityService): void {
     } takes ${testTurns} adventure${testTurns === 1 ? "" : "s"} (predicted: ${
       whichTest.prediction
     }).`,
-    "blue"
+    "blue",
   );
   set(`_CSTest${whichTest.id}`, testTurns + (have($effect`Simmering`) ? 1 : 0));
 }
+
+export const mainStat = myPrimestat();
+export const mainStatStr = mainStat.toString();
+export const mainStatMaximizerStr =
+  mainStat === $stat`Muscle` ? "mus" : mainStat === $stat`Mysticality` ? "myst" : "mox";
 
 export function tryAcquiringEffect(ef: Effect, tryRegardless = false): void {
   // Try acquiring an effect
@@ -241,6 +264,58 @@ export function canAcquireEffect(ef: Effect): boolean {
     .some((b) => b);
 }
 
+function handleCustomPull(pullStr: string): boolean {
+  // Pull a given item and use it if we can
+  // Note: We should be running this in prepare(), which occurs after equipping
+  // If the user wants to pull equips, they should pre-pull them
+  const pullID = toInt(pullStr);
+  const it = toItem(pullID);
+
+  if (pullID <= 0 || it.id <= 0) return false; // Invalid item
+
+  if (!have(it)) {
+    if (
+      get("_roninStoragePulls").split(",").length >= 5 || // We are out of pulls
+      get("_roninStoragePulls").split(",").includes(pullStr) || // We have already pulled this item
+      storageAmount(it) === 0 // We don't have this item
+    )
+      return false;
+
+    if (!takeStorage(it, 1)) return false;
+  }
+
+  if (it.inebriety > 0) {
+    tryAcquiringEffect($effect`Ode to Booze`);
+    drink(it, 1);
+    return true;
+  } else if (it.fullness > 0) {
+    eat(it, 1);
+    return true;
+  } else if (it.spleen > 0) {
+    chew(it, 1);
+    return true;
+  } else if (it.usable) {
+    use(it, 1);
+    return true;
+  }
+  return false;
+}
+
+export function handleCustomPulls(prefName: string, maximizerString = ""): boolean {
+  // Takes a test preference and tries to pull all valid items
+  // Returns true if we managed any successful pull
+  if (
+    get(prefName)
+      .split(",")
+      .map(handleCustomPull)
+      .some((success) => success)
+  ) {
+    if (maximizerString.length > 0) cliExecute(maximizerString); // If we managed to pull an item, we might need to re-maximize
+    return true;
+  }
+  return false;
+}
+
 // Adapted from goorbo
 const gardens = $items`packet of pumpkin seeds, Peppermint Pip Packet, packet of dragon's teeth, packet of beer seeds, packet of winter seeds, packet of thanksgarden seeds, packet of tall grass seeds, packet of mushroom spores, packet of rock seeds`;
 export function getGarden(): Item {
@@ -258,7 +333,7 @@ export function wishFor(ef: Effect, useGenie = true): void {
   if (
     have($item`cursed monkey's paw`) &&
     !get("instant_saveMonkeysPaw", false) &&
-    get("_monkeyPawWishesUsed", 0) < 5
+    get("_monkeyPawWishesUsed") < 5
   ) {
     if (monkeyPaw(ef)) return;
   }
@@ -268,13 +343,13 @@ export function wishFor(ef: Effect, useGenie = true): void {
   }
 }
 
-export function overlevelled(): boolean {
+export function overleveled(): boolean {
   return myLevel() >= 20;
 }
-export const targetBaseMyst = get("instant_targetBaseMyst", 190);
-export const targetBaseMystGap = get("instant_targetBaseMystGap", 15);
+export const targetBaseMainStat = get("instant_targetBaseMainStat", 190);
+export const targetBaseMainStatGap = get("instant_targetBaseMainStatGap", 15);
 export function haveCBBIngredients(fullCheck: boolean, verbose = false): boolean {
-  if (!have($familiar`Cookbookbat`)) return true;
+  if (!have($familiar`Cookbookbat`) || myClass() !== $class`Sauceror`) return true;
   let yeast = 0,
     vegetable = 0,
     whey = 0;
@@ -297,7 +372,7 @@ export function haveCBBIngredients(fullCheck: boolean, verbose = false): boolean
     if (
       !get("instant_saveWileyWheyBar", false) &&
       !have($effect`Awfully Wily`) &&
-      myBasestat($stat`Mysticality`) < targetBaseMyst
+      myBasestat(mainStat) < targetBaseMainStat
     ) {
       whey += 1;
     }
@@ -318,8 +393,8 @@ export const synthExpBuff =
   mainStat === $stat`Muscle`
     ? $effect`Synthesis: Movement`
     : mainStat === $stat`Mysticality`
-    ? $effect`Synthesis: Learning`
-    : $effect`Synthesis: Style`;
+      ? $effect`Synthesis: Learning`
+      : $effect`Synthesis: Style`;
 
 export const complexCandies = $items``.filter((candy) => candy.candyType === "complex");
 const peppermintCandiesCosts = new Map<Item, number>([
@@ -332,7 +407,7 @@ const peppermintCandiesCosts = new Map<Item, number>([
   [$item`cane-mail shirt`, 15],
 ]);
 const nonPeppermintCandies = complexCandies.filter(
-  (candy) => !Array.from(peppermintCandiesCosts.keys()).includes(candy)
+  (candy) => !Array.from(peppermintCandiesCosts.keys()).includes(candy),
 );
 
 function haveCandies(a: Item, b: Item): boolean {
@@ -343,7 +418,7 @@ function haveCandies(a: Item, b: Item): boolean {
     else
       candiesRequired.set(
         $item`peppermint sprout`,
-        currentAmount + (peppermintCandiesCosts.get(candy) ?? Infinity)
+        currentAmount + (peppermintCandiesCosts.get(candy) ?? Infinity),
       );
   });
 
@@ -372,7 +447,7 @@ export function getSynthExpBuff(): void {
     left.map((it) => retrievePrice(it)).reduce((acc, val) => acc + val) <
     right.map((it) => retrievePrice(it)).reduce((acc, val) => acc + val)
       ? left
-      : right
+      : right,
   );
   if (bestPair[0] === bestPair[1]) retrieveItem(bestPair[0], 2);
   else bestPair.forEach((it) => retrieveItem(it));
@@ -425,15 +500,15 @@ export function camelFightsLeft(): number {
     ? have($effect`Shadow Affinity`)
       ? haveEffect($effect`Shadow Affinity`)
       : get("_shadowAffinityToday")
-      ? 11
-      : 0
+        ? 11
+        : 0
     : 0;
   const snojo = get("snojoAvailable") ? 10 - get("_snojoFreeFights") : 0;
   const NEP = get("neverendingPartyAlways") ? 10 - get("_neverendingPartyFreeTurns") : 0;
   const witchess = Witchess.have() ? 5 - get("_witchessFights") : 0;
   const DMT = have($familiar`Machine Elf`) ? 5 - get("_machineTunnelsAdv") : 0;
   const LOV = get("loveTunnelAvailable") && !get("_loveTunnelToday") ? 3 : 0;
-  const olivers = get("ownsSpeakeasy") ? 3 - get("_speakeasyFreeFights", 0) : 0;
+  const olivers = get("ownsSpeakeasy") ? 3 - get("_speakeasyFreeFights") : 0;
   const tentacle = get("_eldritchTentacleFought") ? 1 : 0;
   const sausageGoblin = getKramcoWandererChance() >= 1.0 ? 1 : 0;
   const XRay = have($item`Lil' Doctor™ bag`) ? 3 - get("_chestXRayUsed") : 0;
@@ -456,6 +531,11 @@ export function camelFightsLeft(): number {
   const noveltySkeleton = have($item`cherry`) || CommunityService.CoilWire.isDone() ? 0 : 1;
   // Red skeleton is not guaranteed since we can't guarantee we run out of yellow ray by then
 
+  const leafFreeFights =
+    haveInCampground($item`A Guide to Burning Leaves`) && !get("instant_saveLeafFights", false)
+      ? 5 - toInt(get("_leafMonstersFought"))
+      : 0; //It's possible we get fewer than 5 fights; it has not happened to me in almost a month of testing
+
   return sumNumbers([
     shadowRift,
     snojo,
@@ -472,6 +552,7 @@ export function camelFightsLeft(): number {
     locketedWitchess,
     backups,
     noveltySkeleton,
+    leafFreeFights,
   ]);
 }
 
@@ -511,15 +592,26 @@ export function computeCombatFrequency(): number {
             .split(", ")
             .filter((s) => s.includes("Combat Frequency"))
             .join("")
-            .split(": ")[1]
+            .split(": ")[1],
         )
       : 0;
   const shadowWaters = have($item`closed-circuit pay phone`) ? -10 : 0;
   const powerfulGlove =
     have($item`Powerful Glove`) && !forbiddenEffects.includes($effect`Invisible Avatar`) ? -10 : 0;
   const shoeGum = get("hasDetectiveSchool") && !get("instant_saveCopDollars", false) ? -5 : 0;
-  const silentRunning = -5;
+  const silentRunning = have($item`Clan VIP Lounge key`) ? -5 : 0;
   const feelingLonely = have($skill`Feel Lonely`) ? -5 : 0;
+  const aprilingBandPatrolBeat = have($item`Apriling band helmet`) ? -10 : 0;
+
+  // Since Offhand Remarkable is useful for tests after famwt + NC, if it is being used at all,
+  // we should not burn most of its turns on famwt (i.e. NC -> famwt)
+  // This means we should only swap NC before famwt if we can hit <= -95 if we are not using Offhand Remarkable at all
+  // const offhandRemarkable =
+  //   have($skill`Aug. 13th: Left/Off Hander's Day!`) &&
+  //   !forbiddenEffects.includes($effect`Offhand Remarkable`)
+  //     ? offhand
+  //     : 0;
+
   const effects = sumNumbers([
     rose,
     smoothMovements,
@@ -530,6 +622,8 @@ export function computeCombatFrequency(): number {
     shoeGum,
     silentRunning,
     feelingLonely,
+    aprilingBandPatrolBeat,
+    // offhandRemarkable,
   ]);
 
   const disgeist = have($familiar`Disgeist`) ? -5 : 0;
@@ -552,7 +646,7 @@ export function computeCombatFrequency(): number {
 
   print("Determining if we should run NC before fam test...");
   print(
-    `Hat ${hat}, Shirt ${shirt}, Back ${back}, Offhand ${offhand}, Pants ${pants}, Accessories ${accessories}, Effects ${effects}, Others ${others}`
+    `Hat ${hat}, Shirt ${shirt}, Back ${back}, Offhand ${offhand}, Pants ${pants}, Accessories ${accessories}, Effects ${effects}, Familiar ${familiar}, Others ${others}`,
   );
   if (total <= -95) {
     print(`Total ${total} <= -95`, "green");
@@ -573,4 +667,152 @@ export function refillLatte(): void {
 
   const lastIngredient = get("latteUnlocks").includes("carrot") ? "carrot" : "pumpkin";
   if (get("_latteRefillsUsed") < 3) cliExecute(`latte refill cinnamon vanilla ${lastIngredient}`);
+}
+
+export const reagentBalancerEffect: Effect = {
+  Muscle: $effect`Stabilizing Oiliness`,
+  Mysticality: $effect`Expert Oiliness`,
+  Moxie: $effect`Slippery Oiliness`,
+}[mainStatStr];
+
+export const reagentBalancerItem: Item = {
+  Muscle: $item`oil of stability`,
+  Mysticality: $item`oil of expertise`,
+  Moxie: $item`oil of slipperiness`,
+}[mainStatStr];
+
+export const reagentBalancerIngredient: Item = {
+  Muscle: $item`lime`,
+  Mysticality: $item`cherry`,
+  Moxie: $item`jumbo olive`,
+}[mainStatStr];
+
+export const reagentBoosterEffect: Effect = {
+  Muscle: $effect`Phorcefullness`,
+  Mysticality: $effect`Mystically Oiled`,
+  Moxie: $effect`Superhuman Sarcasm`,
+}[mainStatStr];
+
+export const reagentBoosterItem: Item = {
+  Muscle: $item`philter of phorce`,
+  Mysticality: $item`ointment of the occult`,
+  Moxie: $item`serum of sarcasm`,
+}[mainStatStr];
+
+export const reagentBoosterIngredient: Item = {
+  Muscle: $item`lemon`,
+  Mysticality: $item`grapefruit`,
+  Moxie: $item`olive`,
+}[mainStatStr];
+
+export const xpWishEffect: Effect = {
+  Muscle: $effect`HGH-charged`,
+  Mysticality: $effect`Different Way of Seeing Things`,
+  Moxie: $effect`Thou Shant Not Sing`,
+}[mainStatStr];
+
+export const snapperXpItem: Item = {
+  Muscle: $item`vial of humanoid growth hormone`,
+  Mysticality: $item`non-Euclidean angle`,
+  Moxie: $item`Shantix™`,
+}[mainStatStr];
+
+export const abstractionXpItem: Item = {
+  Muscle: $item`abstraction: purpose`,
+  Mysticality: $item`abstraction: category`,
+  Moxie: $item`abstraction: perception`,
+}[mainStatStr];
+
+export const abstractionXpEffect: Effect = {
+  Muscle: $effect`Purpose`,
+  Mysticality: $effect`Category`,
+  Moxie: $effect`Perception`,
+}[mainStatStr];
+
+export const generalStoreXpEffect: Effect = {
+  Muscle: $effect`Go Get 'Em, Tiger!`,
+  Mysticality: $effect`Glittering Eyelashes`,
+  Moxie: $effect`Butt-Rock Hair`,
+}[mainStatStr];
+
+export function goVote(): void {
+  const initPriority: Map<string, number> = new Map([
+    ["Weapon Damage Percent: +100", 5],
+    ["Item Drop: +15", 4],
+    ["Booze Drop: +30", 4],
+    ["Monster Level: +10", 3],
+    [`${mainStat} Percent: +25`, 3],
+    ["Adventures: +1", 3],
+    ["Spell Damage Percent: +20", 3],
+    ["Familiar Experience: +2", 2],
+    [`Experience (${mainStat}): +4`, 2],
+    ["Hot Resistance: +3", 2],
+    ["Meat Drop: +30", 1],
+    [`Experience: +3`, 1],
+    ["Meat Drop: -30", -2],
+    ["Item Drop: -15", -4],
+    ["Familiar Experience: -2", -4],
+    [`Experience: -3`, -4],
+    [`Maximum HP Percent: -50`, -4],
+    ["Weapon Damage Percent: -50", -6],
+    ["Spell Damage Percent: -50", -6],
+    ["Adventures: -2", -6],
+  ]);
+
+  const voteLocalPriorityArr = [1, 2, 3, 4].map((index) => ({
+    urlString: index - 1,
+    value:
+      initPriority.get(get(`_voteLocal${index}`)) ??
+      (get(`_voteLocal${index}`).includes("-") ? -1 : 1),
+  }));
+
+  const init = maxBy(voteLocalPriorityArr, "value").urlString;
+
+  const voteOptimally = get("instant_voteOptimally", false) ? 2 : 1;
+  const voterValueTable = [
+    {
+      monster: $monster`terrible mutant`,
+      value: voteOptimally,
+    },
+    {
+      monster: $monster`angry ghost`,
+      value: 1,
+    },
+    {
+      monster: $monster`government bureaucrat`,
+      value: 1,
+    },
+    {
+      monster: $monster`annoyed snake`,
+      value: 1,
+    },
+    {
+      monster: $monster`slime blob`,
+      value: 1,
+    },
+  ];
+
+  const votingMonsterPriority = voterValueTable
+    .sort((a, b) => b.value - a.value)
+    .map((element) => element.monster.name);
+
+  const monsterVote =
+    votingMonsterPriority.indexOf(get("_voteMonster1")) <
+    votingMonsterPriority.indexOf(get("_voteMonster2"))
+      ? 1
+      : 2;
+
+  visitUrl(`choice.php?option=1&whichchoice=1331&g=${monsterVote}&local[]=${init}&local[]=${init}`);
+}
+
+export function canPull(id: number): boolean {
+  if (inHardcore()) return false;
+  else if (
+    get("_roninStoragePulls").split(",").length >= 5 ||
+    id <= 0 ||
+    get("_roninStoragePulls").split(",").includes(id.toString()) ||
+    storageAmount(toItem(id)) === 0
+  )
+    return false;
+  return true;
 }

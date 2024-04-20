@@ -1,5 +1,5 @@
 import { OutfitSpec } from "grimoire-kolmafia";
-import { cliExecute, equip, equippedItem, Familiar, Item, toInt } from "kolmafia";
+import { cliExecute, equip, equippedItem, Familiar, Item, myPrimestat, toInt } from "kolmafia";
 import {
   $effect,
   $familiar,
@@ -7,12 +7,15 @@ import {
   $item,
   $skill,
   $slot,
+  $stat,
   DaylightShavings,
+  examine,
   get,
   have,
   maxBy,
 } from "libram";
-import { camelFightsLeft, haveCBBIngredients } from "../lib";
+import { camelFightsLeft, haveCBBIngredients, mainStatMaximizerStr } from "../lib";
+import { excludedFamiliars } from "../resources";
 
 export function garbageShirt(): void {
   if (
@@ -56,12 +59,12 @@ export function sugarItemsAboutToBreak(): Item[] {
 }
 
 function nanorhino(allowAttackingFamiliars = false): Familiar {
-  return allowAttackingFamiliars && get("_nanorhinoCharge", 0) === 100
+  return allowAttackingFamiliars && get("_nanorhinoCharge") === 100
     ? $familiar`Nanorhino`
     : $familiar.none;
 }
 
-function cookbookbat(): Familiar {
+export function cookbookbat(): Familiar {
   return !haveCBBIngredients(true) ? $familiar`Cookbookbat` : $familiar.none;
 }
 
@@ -78,8 +81,7 @@ function garbageFire(): Familiar {
 function sombrero(allowAttackingFamiliars = true): Familiar {
   const sombreros = [
     ...(allowAttackingFamiliars
-      ? // eslint-disable-next-line libram/verify-constants
-        $familiars`Jill-of-All-Trades, Patriotic Eagle, Galloping Grill`
+      ? $familiars`Jill-of-All-Trades, Patriotic Eagle, Galloping Grill`
       : []),
     $familiar`Baby Sandworm`,
     $familiar`Hovering Sombrero`,
@@ -95,7 +97,7 @@ function optimisticCandle(): Familiar {
   return !have($item`glob of melted wax`) ? $familiar`Optimistic Candle` : $familiar.none;
 }
 
-function melodramedary(): Familiar {
+export function melodramedary(): Familiar {
   return have($familiar`Melodramedary`) &&
     camelFightsLeft() >= Math.ceil((100 - get("camelSpit")) / 3.0) &&
     get("camelSpit") < 100
@@ -103,10 +105,13 @@ function melodramedary(): Familiar {
     : $familiar.none;
 }
 
+function hoboInSheepsClothing(): Familiar {
+  return have($familiar`Hobo in Sheep's Clothing`) && !have($item`grubby wool`, 2)
+    ? $familiar`Hobo in Sheep's Clothing`
+    : $familiar.none;
+}
+
 export function chooseFamiliar(allowAttackingFamiliars = true): Familiar {
-  const ignoredFamiliars = get("instant_explicitlyExcludedFamiliars", "")
-    .split(",")
-    .map((i) => toInt(i));
   const defaultFam = have($familiar`Cookbookbat`) ? $familiar`Cookbookbat` : $familiar.none;
   const familiars = [
     cookbookbat,
@@ -116,10 +121,11 @@ export function chooseFamiliar(allowAttackingFamiliars = true): Familiar {
     optimisticCandle,
     rockinRobin,
     melodramedary,
+    hoboInSheepsClothing,
     sombrero,
   ]
     .map((fn) => fn(allowAttackingFamiliars))
-    .filter((fam) => have(fam) && !ignoredFamiliars.includes(toInt(fam)));
+    .filter((fam) => have(fam) && !excludedFamiliars.includes(toInt(fam)));
   return familiars.length > 0 ? familiars[0] : defaultFam;
 }
 
@@ -127,7 +133,7 @@ const specialEquipFamiliars = $familiars`Disembodied Hand, Left-Hand Man, Mad Ha
 export function chooseHeaviestFamiliar(): Familiar {
   return maxBy(
     Familiar.all().filter((fam) => have(fam) && !specialEquipFamiliars.includes(fam)),
-    (fam) => fam.experience
+    (fam) => fam.experience,
   );
 }
 
@@ -139,21 +145,36 @@ export function avoidDaylightShavingsHelm(): boolean {
   );
 }
 
-export function baseOutfit(allowAttackingFamiliars = true, cookbookbatWanted = false): OutfitSpec {
-  // Only try equipping/nag LOV Epaulettes if we are done with the LOV tunnel
-  const lovTunnelCompleted = get("_loveTunnelUsed") || !get("loveTunnelAvailable");
+function useCandyCaneSword(): boolean {
+  if (!have($item`candy cane sword cane`) || get("instant_saveCandySword", false)) return false;
+  examine($item`candy cane sword cane`);
+  if (get("_surprisinglySweetSlashUsed") < 11 || get("_surprisinglySweetStabUsed") < 11) {
+    return true;
+  }
+  return false;
+}
 
+export function baseOutfit(allowAttackingFamiliars = true, cookbookbatWanted = false): OutfitSpec {
   return {
+    weapon: useCandyCaneSword()
+      ? $item`candy cane sword cane`
+      : have($item`fish hatchet`)
+        ? $item`fish hatchet`
+        : have($item`bass clarinet`)
+          ? $item`bass clarinet`
+          : myPrimestat() === $stat`Muscle` && have($item`June cleaver`)
+            ? $item`June cleaver`
+            : undefined,
     hat: avoidDaylightShavingsHelm() ? undefined : $item`Daylight Shavings Helmet`,
     offhand: $item`unbreakable umbrella`,
-    back: lovTunnelCompleted ? $item`LOV Epaulettes` : undefined,
-    acc1: $item`codpiece`,
+    acc1: myPrimestat() === $stat`Mysticality` ? $item`codpiece` : undefined,
     acc2:
-      have($item`Cincho de Mayo`) && get("_cinchUsed", 0) < 95 && !get("instant_saveCinch", false)
+      have($item`Cincho de Mayo`) && get("_cinchUsed") < 95 && !get("instant_saveCinch", false)
         ? $item`Cincho de Mayo`
         : undefined,
+    acc3: $item`spring shoes`,
     familiar: cookbookbatWanted ? $familiar`Cookbookbat` : chooseFamiliar(allowAttackingFamiliars),
-    modifier: "0.25 mys, 0.33 ML, -equip tinsel tights, -equip wad of used tape",
+    modifier: `1 ${mainStatMaximizerStr}, 0.95 ML, 6 ${mainStatMaximizerStr} exp, 30 ${mainStatMaximizerStr} experience percent, -equip tinsel tights, -equip wad of used tape`,
     avoid: [
       ...sugarItemsAboutToBreak(),
       ...(avoidDaylightShavingsHelm() ? [$item`Daylight Shavings Helmet`] : []),

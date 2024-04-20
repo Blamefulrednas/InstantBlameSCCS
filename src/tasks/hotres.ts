@@ -26,9 +26,11 @@ import {
   uneffect,
 } from "libram";
 import { Quest } from "../engine/task";
-import { logTestSetup, tryAcquiringEffect, wishFor } from "../lib";
+import { handleCustomPulls, logTestSetup, tryAcquiringEffect, wishFor } from "../lib";
 import { chooseFamiliar, sugarItemsAboutToBreak } from "../engine/outfit";
 import Macro from "../combat";
+
+const hotTestMaximizerString = "hot res";
 
 export const HotResQuest: Quest = {
   name: "Hot Res",
@@ -62,7 +64,7 @@ export const HotResQuest: Quest = {
           .trySkill($skill`Use the Force`)
           .trySkill($skill`Shocking Lick`)
           .tryItem($item`yellow rocket`)
-          .default()
+          .default(),
       ),
       limit: { tries: 1 },
     },
@@ -87,7 +89,7 @@ export const HotResQuest: Quest = {
         Macro.trySkill($skill`Become a Cloud of Mist`)
           .skill($skill`Fire Extinguisher: Foam Yourself`)
           .skill($skill`Use the Force`)
-          .abort()
+          .abort(),
       ),
       limit: { tries: 1 },
     },
@@ -118,6 +120,12 @@ export const HotResQuest: Quest = {
       name: "Metal Meteoroid",
       completed: () => !have($item`metal meteoroid`) || have($item`meteorite guard`),
       do: () => create($item`meteorite guard`, 1),
+      limit: { tries: 1 },
+    },
+    {
+      name: "Grubby Wool Scarf",
+      completed: () => !have($item`grubby wool`) || have($item`grubby wool scarf`),
+      do: () => create($item`grubby wool scarf`, 1),
       limit: { tries: 1 },
     },
     {
@@ -158,7 +166,7 @@ export const HotResQuest: Quest = {
           $effect`Robot Friends`,
         ];
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef, true));
-        cliExecute("maximize hot res");
+        handleCustomPulls("instant_hotTestPulls", hotTestMaximizerString);
 
         // If it saves us >= 6 turns, try using a wish
         if (CommunityService.HotRes.actualCost() >= 7) wishFor($effect`Fireproof Lips`);
@@ -185,14 +193,17 @@ export const HotResQuest: Quest = {
           print("Manually complete the test if you think this is fine.", "red");
           print(
             "You may also increase the turn limit by typing 'set instant_hotTestTurnLimit=<new limit>'",
-            "red"
+            "red",
           );
         }
         CommunityService.HotRes.run(() => logTestSetup(CommunityService.HotRes), maxTurns);
       },
       outfit: {
-        modifier: "hot res",
+        modifier: hotTestMaximizerString,
         familiar: $familiar`Exotic Parrot`,
+      },
+      post: (): void => {
+        if (get("_horsery") === "pale horse") cliExecute("horsery dark");
       },
       limit: { tries: 1 },
     },
