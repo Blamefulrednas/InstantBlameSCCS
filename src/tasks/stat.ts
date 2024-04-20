@@ -1,4 +1,4 @@
-import { buy, create, Effect, itemAmount, print, use, useSkill } from "kolmafia";
+import { buy, create, Effect, itemAmount, print, Stat, use, useSkill } from "kolmafia";
 import {
   $coinmaster,
   $effect,
@@ -6,6 +6,7 @@ import {
   $item,
   $items,
   $skill,
+  $stat,
   CommunityService,
   ensureEffect,
   get,
@@ -14,8 +15,30 @@ import {
   withChoice,
 } from "libram";
 import { Quest } from "../engine/task";
-import { logTestSetup, tryAcquiringEffect } from "../lib";
+import {
+  handleCustomPulls,
+  logTestSetup,
+  mainStat,
+  reagentBalancerEffect,
+  reagentBalancerItem,
+  tryAcquiringEffect,
+} from "../lib";
 import { forbiddenEffects } from "../resources";
+
+const hpTestMaximizerString = "HP, switch disembodied hand, -switch left-hand man";
+const musTestMaximizerString = "Muscle, switch disembodied hand, -switch left-hand man";
+const mystTestMaximizerString = "Mysticality, switch disembodied hand, -switch left-hand man";
+const moxTestMaximizerString = "Mox, switch disembodied hand, -switch left-hand man";
+
+function useBalancerForTest(testStat: Stat): void {
+  if (testStat === mainStat) {
+    return;
+  }
+  if (!have(reagentBalancerEffect) && !have(reagentBalancerItem)) {
+    create(reagentBalancerItem, 1);
+  }
+  ensureEffect(reagentBalancerEffect);
+}
 
 export const HPQuest: Quest = {
   name: "HP",
@@ -24,8 +47,9 @@ export const HPQuest: Quest = {
       name: "Test",
       completed: () => CommunityService.HP.isDone(),
       prepare: (): void => {
+        useBalancerForTest($stat`Muscle`);
         $effects`Ur-Kel's Aria of Annoyance, Aloysius' Antiphon of Aptitude, Ode to Booze`.forEach(
-          (ef) => uneffect(ef)
+          (ef) => uneffect(ef),
         );
         const usefulEffects: Effect[] = [
           $effect`A Few Extra Pounds`,
@@ -43,6 +67,7 @@ export const HPQuest: Quest = {
           $effect`Triple-Sized`,
         ];
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef, true));
+        handleCustomPulls("instant_hpTestPulls", hpTestMaximizerString);
       },
       do: (): void => {
         const maxTurns = get("instant_hpTestTurnLimit", 1);
@@ -53,12 +78,12 @@ export const HPQuest: Quest = {
           print("Manually complete the test if you think this is fine.", "red");
           print(
             "You may also increase the turn limit by typing 'set instant_hpTestTurnLimit=<new limit>'",
-            "red"
+            "red",
           );
         }
         CommunityService.HP.run(() => logTestSetup(CommunityService.HP), maxTurns);
       },
-      outfit: { modifier: "HP, switch disembodied hand, -switch left-hand man" },
+      outfit: { modifier: hpTestMaximizerString },
       limit: { tries: 1 },
     },
   ],
@@ -71,10 +96,7 @@ export const MuscleQuest: Quest = {
       name: "Test",
       completed: () => CommunityService.Muscle.isDone(),
       prepare: (): void => {
-        if (!have($effect`Expert Oiliness`) && !have($item`oil of expertise`)) {
-          create($item`oil of expertise`, 1);
-        }
-        ensureEffect($effect`Expert Oiliness`);
+        useBalancerForTest($stat`Muscle`);
         if (
           !have($effect`Phorcefullness`) &&
           !have($item`philter of phorce`) &&
@@ -84,8 +106,11 @@ export const MuscleQuest: Quest = {
         }
         const usefulEffects: Effect[] = [
           $effect`Big`,
+          $effect`Disdain of the War Snapper`,
+          $effect`Feeling Excited`,
           $effect`Go Get 'Em, Tiger!`,
           $effect`Hulkien`,
+          $effect`Macaroni Coating`,
           $effect`Quiet Determination`,
           $effect`Power Ballad of the Arrowsmith`,
           $effect`Phorcefullness`,
@@ -95,6 +120,7 @@ export const MuscleQuest: Quest = {
           $effect`Triple-Sized`,
         ];
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef, true));
+        handleCustomPulls("instant_musTestPulls", musTestMaximizerString);
       },
       do: (): void => {
         const maxTurns = get("instant_musTestTurnLimit", 2);
@@ -105,12 +131,12 @@ export const MuscleQuest: Quest = {
           print("Manually complete the test if you think this is fine.", "red");
           print(
             "You may also increase the turn limit by typing 'set instant_musTestTurnLimit=<new limit>'",
-            "red"
+            "red",
           );
         }
         CommunityService.Muscle.run(() => logTestSetup(CommunityService.Muscle), maxTurns);
       },
-      outfit: { modifier: "Muscle, switch disembodied hand, -switch left-hand man" },
+      outfit: { modifier: musTestMaximizerString },
       post: (): void => {
         uneffect($effect`Power Ballad of the Arrowsmith`);
       },
@@ -126,8 +152,18 @@ export const MysticalityQuest: Quest = {
       name: "Test",
       completed: () => CommunityService.Mysticality.isDone(),
       prepare: (): void => {
+        useBalancerForTest($stat`Mysticality`);
+        if (
+          !have($effect`Mystically Oiled`) &&
+          !have($item`ointment of the occult`) &&
+          $items`scrumptious reagent, grapefruit`.every((it) => have(it))
+        ) {
+          create($item`ointment of the occult`, 1);
+        }
         const usefulEffects: Effect[] = [
           $effect`Big`,
+          $effect`Disdain of She-Who-Was`,
+          $effect`Feeling Excited`,
           $effect`Glittering Eyelashes`,
           $effect`Hulkien`,
           $effect`The Magical Mojomuscular Melody`,
@@ -137,8 +173,10 @@ export const MysticalityQuest: Quest = {
           $effect`Saucemastery`,
           $effect`Song of Bravado`,
           $effect`Stevedave's Shanty of Superiority`,
+          $effect`Mystically Oiled`,
         ];
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef, true));
+        handleCustomPulls("instant_mystTestPulls", mystTestMaximizerString);
       },
       do: (): void => {
         const maxTurns = get("instant_mystTestTurnLimit", 1);
@@ -149,15 +187,15 @@ export const MysticalityQuest: Quest = {
           print("Manually complete the test if you think this is fine.", "red");
           print(
             "You may also increase the turn limit by typing 'set instant_mystTestTurnLimit=<new limit>'",
-            "red"
+            "red",
           );
         }
         CommunityService.Mysticality.run(
           () => logTestSetup(CommunityService.Mysticality),
-          maxTurns
+          maxTurns,
         );
       },
-      outfit: { modifier: "Mysticality, switch disembodied hand, -switch left-hand man" },
+      outfit: { modifier: mystTestMaximizerString },
       post: (): void => {
         uneffect($effect`The Magical Mojomuscular Melody`);
       },
@@ -175,7 +213,7 @@ export const MoxieQuest: Quest = {
       completed: () =>
         have($item`red-soled high heels`) ||
         !have($item`2002 Mr. Store Catalog`) ||
-        get("availableMrStore2002Credits", 0) <= get("instant_saveCatalogCredits", 0) ||
+        get("availableMrStore2002Credits") <= get("instant_saveCatalogCredits", 0) ||
         get("instant_skipHighHeels", false),
       do: (): void => {
         if (!have($item`Letter from Carrie Bradshaw`)) {
@@ -220,10 +258,7 @@ export const MoxieQuest: Quest = {
       name: "Test",
       completed: () => CommunityService.Moxie.isDone(),
       prepare: (): void => {
-        if (!have($effect`Expert Oiliness`) && !have($item`oil of expertise`)) {
-          create($item`oil of expertise`, 1);
-        }
-        ensureEffect($effect`Expert Oiliness`);
+        useBalancerForTest($stat`Moxie`);
         const usefulEffects: Effect[] = [
           // $effect`Amazing`,
           $effect`Big`,
@@ -231,10 +266,13 @@ export const MoxieQuest: Quest = {
           $effect`Blubbered Up`,
           $effect`Butt-Rock Hair`,
           $effect`Disco Fever`,
+          $effect`Disco Smirk`,
           $effect`Disco State of Mind`,
+          $effect`Feeling Excited`,
           $effect`Hulkien`,
           $effect`The Moxious Madrigal`,
           $effect`Triple-Sized`,
+          $effect`Penne Fedora`,
           $effect`Pomp & Circumsands`,
           $effect`Quiet Desperation`,
           $effect`Song of Bravado`,
@@ -242,6 +280,9 @@ export const MoxieQuest: Quest = {
           $effect`Unrunnable Face`,
         ];
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef, true));
+        handleCustomPulls("instant_moxTestPulls", moxTestMaximizerString);
+        if (have($skill`Acquire Rhinestones`)) useSkill($skill`Acquire Rhinestones`);
+        if (have($item`rhinestone`)) use($item`rhinestone`, itemAmount($item`rhinestone`));
       },
       do: (): void => {
         const maxTurns = get("instant_moxTestTurnLimit", 5);
@@ -257,12 +298,12 @@ export const MoxieQuest: Quest = {
           print("Manually complete the test if you think this is fine.", "red");
           print(
             "You may also increase the turn limit by typing 'set instant_moxTestTurnLimit=<new limit>'",
-            "red"
+            "red",
           );
         }
         CommunityService.Moxie.run(() => logTestSetup(CommunityService.Moxie), maxTurns);
       },
-      outfit: { modifier: "Moxie, switch disembodied hand, -switch left-hand man" },
+      outfit: { modifier: moxTestMaximizerString },
       limit: { tries: 1 },
     },
   ],

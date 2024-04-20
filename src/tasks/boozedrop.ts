@@ -38,6 +38,7 @@ import {
   $skill,
   $slot,
   clamp,
+  Clan,
   CommunityService,
   DaylightShavings,
   get,
@@ -52,11 +53,14 @@ import {
   setConfiguration,
   Station,
 } from "libram/dist/resources/2022/TrainSet";
-import { logTestSetup, tryAcquiringEffect, wishFor } from "../lib";
+import { handleCustomPulls, logTestSetup, tryAcquiringEffect, wishFor } from "../lib";
 import { chooseFamiliar, sugarItemsAboutToBreak } from "../engine/outfit";
 import { CombatStrategy } from "grimoire-kolmafia";
 import Macro, { haveFreeBanish } from "../combat";
 import { forbiddenEffects } from "../resources";
+
+const boozeTestMaximizerString =
+  "1 Item Drop, 2 Booze Drop, -equip broken champagne bottle, switch disembodied hand, -switch left-hand man";
 
 export const BoozeDropQuest: Quest = {
   name: "Booze Drop",
@@ -72,7 +76,7 @@ export const BoozeDropQuest: Quest = {
         !have($familiar`Ghost of Crimbo Carols`) ||
         !haveFreeBanish() ||
         $effects`Do You Crush What I Crush?, Holiday Yoked, Let It Snow/Boil/Stink/Frighten/Grease, All I Want For Crimbo Is Stuff, Crimbo Wrapping`.some(
-          (ef) => have(ef)
+          (ef) => have(ef),
         ),
       do: $location`The Dire Warren`,
       combat: new CombatStrategy().macro(Macro.banish().abort()),
@@ -113,6 +117,7 @@ export const BoozeDropQuest: Quest = {
     {
       name: "Acquire Clover",
       completed: () =>
+        have($item`Apriling band saxophone`) ||
         have($item`11-leaf clover`) ||
         get("_cloversPurchased") >= 2 ||
         get("instant_skipCyclopsEyedrops", false),
@@ -130,6 +135,8 @@ export const BoozeDropQuest: Quest = {
         have($effect`One Very Clear Eye`) ||
         get("instant_skipCyclopsEyedrops", false),
       do: (): void => {
+        if (have($item`Apriling band saxophone`) && !have($effect`Lucky!`))
+          cliExecute("aprilband play sax");
         if (!have($effect`Lucky!`)) use($item`11-leaf clover`);
         if (!have($item`cyclops eyedrops`)) adv1($location`The Limerick Dungeon`, -1);
       },
@@ -156,12 +163,23 @@ export const BoozeDropQuest: Quest = {
     },
     {
       name: "Fax Ungulith",
-      completed: () => get("_photocopyUsed"),
+      completed: () => get("_photocopyUsed") || have($item`corrupted marrow`),
       do: (): void => {
-        cliExecute("chat");
         if (have($item`photocopied monster`) && get("photocopyMonster") !== $monster`ungulith`) {
           cliExecute("fax send");
         }
+
+        // If we're whitelisted to the CSLooping clan, use that to grab the ungulith instead
+        if (Clan.getWhitelisted().find((c) => c.name.toLowerCase() === "csloopers unite")) {
+          Clan.with("CSLoopers Unite", () => cliExecute("fax receive"));
+        } else {
+          if (!visitUrl("messages.php?box=Outbox").includes("#3626664")) {
+            print("Requesting whitelist to CS clan...", "blue");
+            cliExecute("csend to 3626664 || Requesting access to CS clan");
+          }
+          cliExecute("chat");
+        }
+
         if (
           (have($item`photocopied monster`) || faxbot($monster`ungulith`)) &&
           get("photocopyMonster") === $monster`ungulith`
@@ -191,7 +209,7 @@ export const BoozeDropQuest: Quest = {
           .trySkill($skill`Become a Bat`)
           .trySkill($skill`Fire Extinguisher: Polar Vortex`)
           .trySkill($skill`Use the Force`)
-          .default()
+          .default(),
       ),
       limit: { tries: 5 },
     },
@@ -239,15 +257,13 @@ export const BoozeDropQuest: Quest = {
       completed: () =>
         have($effect`Cabernet Hunter`) ||
         (!have($item`bottle of Cabernet Sauvignon`) &&
-          // eslint-disable-next-line libram/verify-constants
-          (!have($skill`Aug. 31st: Cabernet Sauvignon Day!`) ||
+          (!have($skill`Aug. 31st: Cabernet Sauvignon  Day!`) ||
             get("instant_saveAugustScepter", false))) ||
         myInebriety() + 3 > inebrietyLimit() ||
         get("instant_skipCabernetSauvignon", false),
       do: (): void => {
         if (!have($item`bottle of Cabernet Sauvignon`))
-          // eslint-disable-next-line libram/verify-constants
-          useSkill($skill`Aug. 31st: Cabernet Sauvignon Day!`);
+          useSkill($skill`Aug. 31st: Cabernet Sauvignon  Day!`);
         if (myInebriety() + 3 <= inebrietyLimit()) {
           tryAcquiringEffect($effect`Ode to Booze`);
           drink($item`bottle of Cabernet Sauvignon`);
@@ -329,9 +345,16 @@ export const BoozeDropQuest: Quest = {
       limit: { tries: 1 },
     },
     {
+      name: "Set Apriling Band Helmet (Booze)",
+      completed: () => !have($item`Apriling band helmet`) || get("nextAprilBandTurn") > 0,
+      do: () => cliExecute("aprilband effect drop"),
+      limit: { tries: 1 },
+    },
+    {
       name: "Test",
       prepare: (): void => {
         const usefulEffects: Effect[] = [
+          $effect`Beer Barrel Polka`,
           $effect`Blessing of the Bird`,
           $effect`Crunching Leaves`,
           $effect`Fat Leon's Phat Loot Lyric`,
@@ -343,6 +366,7 @@ export const BoozeDropQuest: Quest = {
           $effect`items.enh`,
           $effect`Joyful Resolve`,
           $effect`One Very Clear Eye`,
+          $effect`Pork Barrel`,
           $effect`Nearly All-Natural`,
           $effect`The Spirit of Taking`,
           $effect`Singer's Faithful Ocelot`,
@@ -355,6 +379,7 @@ export const BoozeDropQuest: Quest = {
           useFamiliar($familiar`Trick-or-Treating Tot`);
           equip($slot`familiar`, $item`li'l ninja costume`);
         }
+        handleCustomPulls("instant_boozeTestPulls", boozeTestMaximizerString);
 
         // If it saves us >= 6 turns, try using a wish
         if (CommunityService.BoozeDrop.actualCost() >= 7) wishFor($effect`Infernal Thirst`);
@@ -369,14 +394,13 @@ export const BoozeDropQuest: Quest = {
           print("Manually complete the test if you think this is fine.", "red");
           print(
             "You may also increase the turn limit by typing 'set instant_boozeTestTurnLimit=<new limit>'",
-            "red"
+            "red",
           );
         }
         CommunityService.BoozeDrop.run(() => logTestSetup(CommunityService.BoozeDrop), maxTurns);
       },
       outfit: {
-        modifier:
-          "1 Item Drop, 2 Booze Drop, -equip broken champagne bottle, switch disembodied hand, -switch left-hand man",
+        modifier: boozeTestMaximizerString,
       },
       limit: { tries: 1 },
     },

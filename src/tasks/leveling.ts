@@ -1,5 +1,6 @@
 import { Quest } from "../engine/task";
 import {
+  adv1,
   autosell,
   buy,
   chew,
@@ -9,10 +10,14 @@ import {
   eat,
   Effect,
   effectModifier,
+  equip,
   equippedItem,
   getMonsters,
   haveEffect,
+  haveEquipped,
+  holiday,
   inebrietyLimit,
+  inHardcore,
   Item,
   itemAmount,
   itemDrops,
@@ -21,6 +26,7 @@ import {
   Monster,
   mpCost,
   myBasestat,
+  myFamiliar,
   myHash,
   myHp,
   myInebriety,
@@ -34,6 +40,7 @@ import {
   putCloset,
   restoreHp,
   restoreMp,
+  retrieveItem,
   runChoice,
   storageAmount,
   takeStorage,
@@ -41,6 +48,7 @@ import {
   toItem,
   totalFreeRests,
   use,
+  useFamiliar,
   useSkill,
   visitUrl,
 } from "kolmafia";
@@ -65,6 +73,7 @@ import {
   getBanishedMonsters,
   getKramcoWandererChance,
   have,
+  set,
   SongBoom,
   SourceTerminal,
   sum,
@@ -75,18 +84,33 @@ import {
 } from "libram";
 import { CombatStrategy, OutfitSpec } from "grimoire-kolmafia";
 import {
+  abstractionXpEffect,
+  abstractionXpItem,
   burnLibram,
+  canPull,
   chooseLibram,
+  generalStoreXpEffect,
   getSynthExpBuff,
   getValidComplexCandyPairs,
   haveCBBIngredients,
-  overlevelled,
+  mainStat,
+  mainStatMaximizerStr,
+  mainStatStr,
+  overleveled,
+  reagentBalancerEffect,
+  reagentBalancerIngredient,
+  reagentBalancerItem,
+  reagentBoosterEffect,
+  reagentBoosterIngredient,
+  reagentBoosterItem,
   refillLatte,
+  snapperXpItem,
   synthExpBuff,
-  targetBaseMyst,
-  targetBaseMystGap,
+  targetBaseMainStat,
+  targetBaseMainStatGap,
   tryAcquiringEffect,
   wishFor,
+  xpWishEffect,
 } from "../lib";
 import { baseOutfit, docBag, garbageShirt, unbreakableUmbrella } from "../engine/outfit";
 import Macro, { haveFreeBanish } from "../combat";
@@ -108,24 +132,68 @@ const craftedCBBEffectsPost: Effect[] = craftedCBBFoodsPost.map((it) =>
 );
 const craftedCBBEffects: Effect[] = craftedCBBFoods.map((it) => effectModifier(it, "effect"));
 let triedCraftingCBBFoods = false;
-const usefulEffects: Effect[] = [
-  // Stats
-  $effect`Big`,
+
+const LOVEquip =
+  mainStatStr === $stat`Muscle`
+    ? "LOV Eardigan"
+    : mainStatStr === $stat`Mysticality`
+      ? "LOV Epaulettes"
+      : "LOV Earring";
+
+const muscleList: Effect[] = [
+  $effect`Seal Clubbing Frenzy`,
+  $effect`Patience of the Tortoise`,
+  $effect`Disdain of the War Snapper`,
+  $effect`Go Get 'Em, Tiger!`,
+  $effect`Muddled`,
+  $effect`Lack of Body-Building`,
+  $effect`Adrenaline Rush`,
+  // Weapon dmg
+  $effect`Carol of the Bulls`,
+];
+
+const mysticalityList: Effect[] = [
   $effect`Pasta Oneness`,
   $effect`Saucemastery`,
   $effect`Disdain of She-Who-Was`,
   $effect`Glittering Eyelashes`,
+  $effect`Uncucumbered`,
+  $effect`We're All Made of Starfish`,
+  $effect`Sparkling Consciousness`,
+  // Spell dmg
+  $effect`Carol of the Hells`,
+];
+
+const moxieList: Effect[] = [
+  $effect`Disco State of Mind`,
+  $effect`Mariachi Mood`,
+  $effect`Butt-Rock Hair`,
+  $effect`Ten out of Ten`,
+  $effect`Pomp & Circumsands`,
+  $effect`Sneaky Serpentine Subtlety`,
+  // Weapon dmg
+  $effect`Carol of the Bulls`,
+];
+
+const statEffects =
+  mainStatStr === `Muscle`
+    ? muscleList
+    : mainStatStr === `Mysticality`
+      ? mysticalityList
+      : moxieList;
+
+const usefulEffects: Effect[] = [
+  // Stats
+  $effect`Big`,
   $effect`Feeling Excited`,
   $effect`Triple-Sized`,
   $effect`substats.enh`,
   $effect`Hulkien`,
-  $effect`Uncucumbered`,
-  $effect`We're All Made of Starfish`,
   $effect`Broad-Spectrum Vaccine`,
   // $effect`Think Win-Lose`,
   // $effect`Confidence of the Votive`,
   $effect`Song of Bravado`,
-  $effect`Sparkling Consciousness`,
+  ...statEffects,
 
   // ML
   $effect`Pride of the Puffin`,
@@ -141,7 +209,6 @@ const usefulEffects: Effect[] = [
   $effect`Aloysius' Antiphon of Aptitude`,
 
   // Spell dmg
-  $effect`Carol of the Hells`,
 ];
 
 const prismaticEffects: Effect[] = [
@@ -191,7 +258,7 @@ export function bestShadowRift(): Location {
                 m === $monster`shadow guy` && have($skill`Just the Facts`)
                   ? $item`pocket wish`
                   : $item.none,
-              ].filter((i) => i !== $item.none)
+              ].filter((i) => i !== $item.none),
             )
             .reduce((acc, val) => acc.concat(val), []);
           return sum(drops, mallPrice);
@@ -248,13 +315,14 @@ export const LevelingQuest: Quest = {
   name: "Leveling",
   completed: () => get("csServicesPerformed").split(",").length > 1,
   tasks: [
+    /*
     {
       name: "LED Candle",
-      // eslint-disable-next-line libram/verify-constants
       completed: () => !have($item`LED candle`) || get("ledCandleMode", "") === "reading",
-      do: () => cliExecute("jillcandle reading"),
+      do: () => cliExecute("ledcandle reading"),
       limit: { tries: 1 },
     },
+    */
     {
       name: "Soul Food",
       ready: () => mySoulsauce() >= 5,
@@ -266,33 +334,54 @@ export const LevelingQuest: Quest = {
     {
       name: "Clan Shower",
       completed: () => get("_aprilShower"),
-      do: () => ensureEffect($effect`Thaumodynamic`),
+      do: (): void => {
+        const aprilShowerEffect: Effect = {
+          Muscle: $effect`Muscle Unbound`,
+          Mysticality: $effect`Thaumodynamic`,
+          Moxie: $effect`So Fresh and So Clean`,
+        }[mainStatStr];
+        ensureEffect(aprilShowerEffect);
+      },
       limit: { tries: 1 },
     },
     {
-      name: "Inscrutable Gaze",
-      completed: () => have($effect`Inscrutable Gaze`) || !have($skill`Inscrutable Gaze`),
-      do: (): void => ensureEffect($effect`Inscrutable Gaze`),
+      name: "Mainstat Gaze",
+      completed: () =>
+        ((have($effect`Inscrutable Gaze`) || !have($skill`Inscrutable Gaze`)) &&
+          mainStat === $stat`Mysticality`) ||
+        ((have($effect`Patient Smile`) || !have($skill`Patient Smile`)) &&
+          mainStat === $stat`Muscle`) ||
+        ((have($effect`Knowing Smile`) || !have($skill`Knowing Smile`)) &&
+          mainStat === $stat`Moxie`),
+      do: (): void => {
+        const mainStatGainEffect: Effect = {
+          Muscle: $effect`Patient Smile`,
+          Mysticality: $effect`Inscrutable Gaze`,
+          Moxie: $effect`Knowing Smile`,
+        }[mainStatStr];
+        ensureEffect(mainStatGainEffect);
+      },
+      limit: { tries: 5 },
     },
-    // {
-    //   name: "Hot in Herre",
-    //   completed: () =>
-    //     have($effect`Hot in Herre`) ||
-    //     !have($item`2002 Mr. Store Catalog`) ||
-    //     get("availableMrStore2002Credits", 0) <= get("instant_saveCatalogCredits", 0) ||
-    //     forbiddenEffects.includes($effect`Hot in Herre`),
-    //   do: (): void => {
-    //     if (!have($item`Charter: Nellyville`)) {
-    //       buy($coinmaster`Mr. Store 2002`, 1, $item`Charter: Nellyville`);
-    //     }
-    //     use($item`Charter: Nellyville`, 1);
-    //   },
-    //   limit: { tries: 3 },
-    // },
+    {
+      name: "Hot in Herre",
+      completed: () =>
+        have($effect`Hot in Herre`) ||
+        !have($item`2002 Mr. Store Catalog`) ||
+        get("availableMrStore2002Credits") <= get("instant_saveCatalogCredits", 0) ||
+        forbiddenEffects.includes($effect`Hot in Herre`),
+      do: (): void => {
+        if (!have($item`Charter: Nellyville`)) {
+          buy($coinmaster`Mr. Store 2002`, 1, $item`Charter: Nellyville`);
+        }
+        use($item`Charter: Nellyville`, 1);
+      },
+      limit: { tries: 3 },
+    },
     {
       name: "Crimbo Candy",
       completed: () =>
-        get("_candySummons", 0) > 0 ||
+        get("_candySummons") > 0 ||
         !have($skill`Summon Crimbo Candy`) ||
         !have($skill`Sweet Synthesis`),
       do: () => useSkill($skill`Summon Crimbo Candy`),
@@ -311,6 +400,7 @@ export const LevelingQuest: Quest = {
     {
       name: "Pull Deep Dish of Legend",
       completed: () =>
+        inHardcore() || // Assume user consciously chose HC and accepts the consequences that come with it
         have($item`Deep Dish of Legend`) ||
         have($effect`In the Depths`) ||
         get("_roninStoragePulls")
@@ -322,8 +412,8 @@ export const LevelingQuest: Quest = {
           print("Uh oh! You do not seem to have a Deep Dish of Legend in Hagnk's", "red");
           print("Consider pulling something to make up for the turngen and 300%mus,", "red");
           print(
-            "then type 'set _instant_skipDeepDishOfLegend=true' before re-running blamesccs",
-            "red"
+            "then type 'set _instant_skipDeepDishOfLegend=true' before re-running instantsccs",
+            "red",
           );
         }
         takeStorage($item`Deep Dish of Legend`, 1);
@@ -333,6 +423,7 @@ export const LevelingQuest: Quest = {
     {
       name: "Pull Calzone of Legend",
       completed: () =>
+        inHardcore() || // Assume user consciously chose HC and accepts the consequences that come with it
         have($item`Calzone of Legend`) ||
         have($effect`In the 'zone zone!`) ||
         get("_roninStoragePulls")
@@ -344,11 +435,11 @@ export const LevelingQuest: Quest = {
           print("Uh oh! You do not seem to have a Calzone of Legend in Hagnk's", "red");
           print(
             "Consider pulling something to make up for the turngen and 300%myst (e.g. a roasted vegetable focaccia),",
-            "red"
+            "red",
           );
           print(
-            "then type 'set _instant_skipCalzoneOfLegend=true' before re-running blamesccs",
-            "red"
+            "then type 'set _instant_skipCalzoneOfLegend=true' before re-running instantsccs",
+            "red",
           );
         }
         takeStorage($item`Calzone of Legend`, 1);
@@ -358,6 +449,7 @@ export const LevelingQuest: Quest = {
     {
       name: "Pull Pizza of Legend",
       completed: () =>
+        inHardcore() || // Assume user consciously chose HC and accepts the consequences that come with it
         have($item`Pizza of Legend`) ||
         have($effect`Endless Drool`) ||
         get("_roninStoragePulls")
@@ -369,8 +461,8 @@ export const LevelingQuest: Quest = {
           print("Uh oh! You do not seem to have a Pizza of Legend in Hagnk's", "red");
           print("Consider pulling something to make up for the turngen and 300%mox,", "red");
           print(
-            "then type 'set _instant_skipPizzaOfLegend=true' before re-running blamesccs",
-            "red"
+            "then type 'set _instant_skipPizzaOfLegend=true' before re-running instantsccs",
+            "red",
           );
         }
         takeStorage($item`Pizza of Legend`, 1);
@@ -387,11 +479,11 @@ export const LevelingQuest: Quest = {
         if (storageAmount($item`one-day ticket to Dinseylandfill`) === 0) {
           print(
             "Uh oh! You do not seem to have a one-day ticket to Dinseylandfill in Hagnk's",
-            "red"
+            "red",
           );
           print(
-            "Try to purchase one from the mall with your meat from Hagnk's before re-running blamesccs",
-            "red"
+            "Try to purchase one from the mall with your meat from Hagnk's before re-running instantsccs",
+            "red",
           );
         }
         takeStorage($item`one-day ticket to Dinseylandfill`, 1);
@@ -403,47 +495,58 @@ export const LevelingQuest: Quest = {
       name: "Wish for XP% buff",
       // TODO: Make this completed if we've already wished twice with the paw (requires mafia tracking)
       completed: () =>
-        have($effect`Different Way of Seeing Things`) ||
+        have(xpWishEffect) ||
         !have($item`cursed monkey's paw`) ||
-        forbiddenEffects.includes($effect`Different Way of Seeing Things`) ||
+        forbiddenEffects.includes(xpWishEffect) ||
         get("instant_saveMonkeysPaw", false) ||
-        myBasestat($stat`Mysticality`) >= targetBaseMyst - targetBaseMystGap ||
-        get("_monkeyPawWishesUsed", 0) >= 2,
-      do: () => wishFor($effect`Different Way of Seeing Things`, false),
+        myBasestat(mainStat) >= targetBaseMainStat - targetBaseMainStatGap ||
+        get("_monkeyPawWishesUsed") >= 2,
+      do: (): void => {
+        wishFor(xpWishEffect, false);
+      },
     },
     {
-      name: "Pull Non-Euclidean Angle",
+      name: "Pull Snapper XP Buff",
       completed: () =>
-        get("_roninStoragePulls").split(",").length >= 5 ||
-        get("_roninStoragePulls")
-          .split(",")
-          .includes(toInt($item`non-Euclidean angle`).toString()) ||
-        have($item`non-Euclidean angle`) ||
-        have($effect`Different Way of Seeing Things`) ||
-        storageAmount($item`non-Euclidean angle`) === 0 ||
+        !canPull(toInt(snapperXpItem)) ||
+        have(snapperXpItem) ||
+        have(xpWishEffect) ||
         get("instant_saveEuclideanAngle", false) ||
         !have($item`a ten-percent bonus`),
       do: (): void => {
-        takeStorage($item`non-Euclidean angle`, 1);
-        chew($item`non-Euclidean angle`, 1);
+        takeStorage(snapperXpItem, 1);
+        chew(snapperXpItem, 1);
       },
       limit: { tries: 1 },
     },
     {
-      name: "Pull Abstraction: Category",
+      name: "Pull Abstraction item",
       completed: () =>
-        get("_roninStoragePulls").split(",").length >= 5 ||
-        get("_roninStoragePulls")
-          .split(",")
-          .includes(toInt($item`abstraction: category`).toString()) ||
-        have($item`abstraction: category`) ||
-        have($effect`Category`) ||
-        storageAmount($item`abstraction: category`) === 0 ||
+        !canPull(toInt(abstractionXpItem)) ||
+        have(abstractionXpItem) ||
+        have(abstractionXpEffect) ||
         get("instant_saveAbstraction", false),
       do: (): void => {
-        takeStorage($item`abstraction: category`, 1);
-        chew($item`abstraction: category`, 1);
+        takeStorage(abstractionXpItem, 1);
+        chew(abstractionXpItem, 1);
       },
+      limit: { tries: 1 },
+    },
+    {
+      // Only do pre-pulls after we're done with important default route pulls
+      name: "Pre-pulls",
+      completed: () =>
+        !get("instant_prePulls", "0")
+          .split(",")
+          .map((id) => toInt(id))
+          .some(canPull),
+      do: () =>
+        get("instant_prePulls", "0")
+          .split(",")
+          .forEach((id) => {
+            const it = toItem(toInt(id));
+            if (!have(it) && canPull(toInt(id))) takeStorage(it, 1);
+          }),
       limit: { tries: 1 },
     },
     {
@@ -562,15 +665,15 @@ export const LevelingQuest: Quest = {
       limit: { tries: 1 },
     },
     {
-      name: "Consult Gorgonzola",
+      name: "Consult Fortune Teller",
       completed: () => get("_clanFortuneBuffUsed") || get("instant_saveFortuneTeller", false),
-      do: () => cliExecute("fortune buff mys"),
+      do: () => cliExecute(`fortune buff ${mainStatMaximizerStr}`),
       limit: { tries: 1 },
     },
     {
-      name: "Use Glittery Mascara",
-      completed: () => have($effect`Glittering Eyelashes`),
-      do: () => ensureEffect($effect`Glittering Eyelashes`),
+      name: "Use General Store Statboost",
+      completed: () => have(generalStoreXpEffect),
+      do: () => ensureEffect(generalStoreXpEffect),
     },
     {
       name: "Buy Oversized Sparkler",
@@ -630,6 +733,31 @@ export const LevelingQuest: Quest = {
       limit: { tries: 1 },
     },
     {
+      name: "June Cleaver NC",
+      completed: () => !have($item`June cleaver`) || get("_juneCleaverFightsLeft") > 0,
+      do: (): void => {
+        adv1($location`Noob Cave`);
+        set("lastEncounter", "");
+      },
+      outfit: { weapon: $item`June cleaver` },
+      combat: new CombatStrategy().macro(Macro.abort()),
+      choices: {
+        1467: 3, // Grab adv
+        1468: mainStat === $stat`Muscle` ? 2 : mainStat === $stat`Moxie` ? 1 : 4, // Grab main substats else skip
+        1469: 3, // Grab meat
+        1470: mainStat === $stat`Muscle` ? 3 : 4, // Grab main substats else skip
+        1471: mainStat === $stat`Muscle` ? 2 : mainStat === $stat`Mysticality` ? 3 : 1, // Grab main substats else savings bond
+        1472: 1, // Grab trampled ticket stub
+        1473: mainStat === $stat`Muscle` ? 1 : 3, // Grab main substats else hot res
+        1474: mainStat === $stat`Muscle` ? 3 : mainStat === $stat`Mysticality` ? 1 : 4, // Grab main substats else skip
+        1475: mainStat === $stat`Muscle` ? 2 : 1, // Grab main substats else mother necklace
+      },
+      post: (): void => {
+        if (have($effect`Beaten Up`)) cliExecute("hottub");
+      },
+      limit: { tries: 10 },
+    },
+    {
       name: "Map Amateur Ninja",
       prepare: (): void => {
         restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
@@ -659,15 +787,14 @@ export const LevelingQuest: Quest = {
             .trySkill($skill`Chest X-Ray`)
             .trySkill($skill`Gingerbread Mob Hit`)
             .trySkill($skill`Shattering Punch`)
-            .default()
-        ).abort()
+            .default(),
+        ).abort(),
       ),
-      outfit: {
-        offhand: $item`unbreakable umbrella`,
-        acc1: $item`codpiece`,
+      outfit: () => ({
+        ...baseOutfit(),
         familiar: $familiar`Trick-or-Treating Tot`,
-        modifier: "0.25 mys, 0.33 ML, -equip tinsel tights, -equip wad of used tape",
-      },
+        modifier: `0.25 ${mainStatMaximizerStr}, 0.33 ML, -equip tinsel tights, -equip wad of used tape, -equip Kramco Sausage-o-Matic™`,
+      }),
       post: () => sellMiscellaneousItems(),
       limit: { tries: 1 },
     },
@@ -695,9 +822,12 @@ export const LevelingQuest: Quest = {
         Macro.trySkill($skill`Curse of Weaksauce`)
           .tryItem($item`blue rocket`)
           .tryItem($item`red rocket`)
-          .default()
+          .default(),
       ),
-      outfit: () => baseOutfit(false),
+      outfit: () => ({
+        ...baseOutfit(false),
+        modifier: `0.25 ${mainStatMaximizerStr}, 0.33 ML, -equip tinsel tights, -equip wad of used tape, -equip Kramco Sausage-o-Matic™`,
+      }),
       post: () => sellMiscellaneousItems(),
       choices: {
         1094: 5,
@@ -722,7 +852,10 @@ export const LevelingQuest: Quest = {
         myMp() >= 500 ||
         haveCBBIngredients(false), // But we can't benefit from Blue Rocket if we are only doing free fights
       do: $location`The Dire Warren`,
-      outfit: () => baseOutfit(false),
+      outfit: () => ({
+        ...baseOutfit(false),
+        modifier: `0.25 ${mainStatMaximizerStr}, 0.33 ML, -equip tinsel tights, -equip wad of used tape, -equip Kramco Sausage-o-Matic™`,
+      }),
       combat: new CombatStrategy().macro(Macro.attack().repeat()),
       post: (): void => {
         sendAutumnaton();
@@ -733,7 +866,10 @@ export const LevelingQuest: Quest = {
     {
       name: "Get Rufus Quest",
       completed: () => get("_shadowAffinityToday") || !have($item`closed-circuit pay phone`),
-      do: () => chooseQuest(() => 2),
+      do: (): void => {
+        chooseQuest(() => 2);
+        if (holiday().includes("April Fool's Day")) visitUrl("questlog.php?which=7");
+      },
       limit: { tries: 1 },
     },
     {
@@ -758,7 +894,8 @@ export const LevelingQuest: Quest = {
       combat: new CombatStrategy().macro(
         Macro.tryItem($item`red rocket`)
           .tryItem($item`blue rocket`)
-          .default(useCinch)
+          .trySkill($skill`Recall Facts: %phylum Circadian Rhythms`)
+          .default(useCinch),
       ),
       outfit: baseOutfit,
       weapon: $item`candy cane sword cane`,
@@ -772,33 +909,34 @@ export const LevelingQuest: Quest = {
       limit: { tries: 12 },
     },
     {
-      name: "Use Ointment of the Occult",
+      name: "Use Reagent Booster",
       completed: () =>
-        (!have($item`grapefruit`) && !have($item`ointment of the occult`)) ||
-        have($effect`Mystically Oiled`),
+        (!have(reagentBoosterIngredient) && !have(reagentBoosterItem)) ||
+        have(reagentBoosterEffect),
       do: (): void => {
-        if (!have($item`ointment of the occult`)) {
-          if (get("reagentSummons") === 0) useSkill($skill`Advanced Saucecrafting`, 1);
-          create($item`ointment of the occult`, 1);
+        if (get("reagentSummons") === 0) useSkill($skill`Advanced Saucecrafting`, 1);
+        if (!have(reagentBoosterItem)) {
+          create(reagentBoosterItem, 1);
         }
-        ensureEffect($effect`Mystically Oiled`);
+        ensureEffect(reagentBoosterEffect);
       },
     },
     {
-      name: "Use Oil of Expertise",
+      name: "Use Reagent Balancer",
       ready: () => get("_loveTunnelUsed") || !get("loveTunnelAvailable"),
       completed: () =>
-        (!have($item`cherry`) && itemAmount($item`oil of expertise`) <= 1) ||
-        have($effect`Expert Oiliness`),
+        (!have(reagentBalancerIngredient) && itemAmount(reagentBalancerItem) <= 1) ||
+        have(reagentBalancerEffect) ||
+        itemAmount(reagentBalancerItem) === 1,
       do: (): void => {
-        if (!have($item`oil of expertise`)) {
-          if (get("reagentSummons") === 0) useSkill($skill`Advanced Saucecrafting`, 1);
-          create($item`oil of expertise`, 1);
+        if (get("reagentSummons") === 0) useSkill($skill`Advanced Saucecrafting`, 1);
+        if (!have(reagentBalancerItem)) {
+          create(reagentBalancerItem, 1);
         }
-        if (itemAmount($item`oil of expertise`) > 1)
-          use($item`oil of expertise`, itemAmount($item`oil of expertise`) - 1);
-        if (have($item`cherry`) && have($effect`Expert Oiliness`))
-          putCloset(itemAmount($item`cherry`), $item`cherry`);
+        if (itemAmount(reagentBalancerItem) > 1)
+          use(reagentBalancerItem, itemAmount(reagentBalancerItem) - 1);
+        if (have(reagentBalancerIngredient) && have(reagentBalancerEffect))
+          putCloset(itemAmount(reagentBalancerIngredient), reagentBalancerIngredient);
       },
       limit: { tries: 1 },
     },
@@ -816,13 +954,44 @@ export const LevelingQuest: Quest = {
       completed: () => get("_snojoFreeFights") >= 10 || !get("snojoAvailable"),
       do: $location`The X-32-F Combat Training Snowman`,
       combat: new CombatStrategy().macro(
-        Macro.trySkill($skill`Recall Facts: %phylum Circadian Rhythms`).default()
+        Macro.trySkill($skill`Recall Facts: %phylum Circadian Rhythms`).default(),
       ),
-      outfit: baseOutfit,
+      outfit: () => ({
+        ...baseOutfit(),
+        modifier: `0.25 ${mainStatMaximizerStr}, 0.33 ML, -equip tinsel tights, -equip wad of used tape, -equip Kramco Sausage-o-Matic™`,
+      }),
       limit: { tries: 10 },
       post: (): void => {
         if (get("_snojoFreeFights") >= 10) cliExecute("hottub");
         sendAutumnaton();
+        sellMiscellaneousItems();
+      },
+    },
+    {
+      name: "Flaming Leaflets",
+      prepare: (): void => {
+        restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
+        unbreakableUmbrella();
+        if (have($item`Lil' Doctor™ bag`) && get("_otoscopeUsed") < 3)
+          equip($slot`acc3`, $item`Lil' Doctor™ bag`);
+        restoreMp(50);
+      },
+      completed: () =>
+        get("_leafMonstersFought") >= 5 ||
+        !have($item`inflammable leaf`, 11) ||
+        get("instant_saveLeafFights", false),
+      do: (): void => {
+        visitUrl("campground.php?preaction=leaves");
+        visitUrl("choice.php?pwd&whichchoice=1510&option=1&leaves=11");
+      },
+      combat: new CombatStrategy().macro(Macro.trySkill($skill`Otoscope`).default()),
+      outfit: () => ({
+        ...baseOutfit(),
+        modifier:
+          "Item Drop, -equip tinsel tights, -equip wad of used tape, -equip Kramco Sausage-o-Matic™",
+      }),
+      limit: { tries: 5 },
+      post: (): void => {
         sellMiscellaneousItems();
       },
     },
@@ -836,7 +1005,10 @@ export const LevelingQuest: Quest = {
       completed: () => get("_snokebombUsed") >= 3 - get("instant_saveSBForInnerElf", 0),
       do: powerlevelingLocation(),
       combat: new CombatStrategy().macro(Macro.trySkill($skill`Snokebomb`).abort()),
-      outfit: baseOutfit,
+      outfit: () => ({
+        ...baseOutfit(),
+        modifier: `0.25 ${mainStatMaximizerStr}, 0.33 ML, -equip tinsel tights, -equip wad of used tape, -equip Kramco Sausage-o-Matic™`,
+      }),
       choices: {
         1094: 5,
         1115: 6,
@@ -879,9 +1051,12 @@ export const LevelingQuest: Quest = {
       combat: new CombatStrategy().macro(
         Macro.if_("!haseffect Everything Looks Yellow", Macro.tryItem($item`yellow rocket`))
           .trySkill($skill`Feel Envy`)
-          .default()
+          .default(),
       ),
-      outfit: () => baseOutfit(false),
+      outfit: () => ({
+        ...baseOutfit(false),
+        modifier: `0.25 ${mainStatMaximizerStr}, 0.33 ML, -equip tinsel tights, -equip wad of used tape, -equip Kramco Sausage-o-Matic™`,
+      }),
       post: (): void => {
         use($item`red box`, 1);
         sendAutumnaton();
@@ -895,34 +1070,32 @@ export const LevelingQuest: Quest = {
         restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
         unbreakableUmbrella();
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
+        if (mainStat === $stat`Muscle`) prismaticEffects.forEach((ef) => tryAcquiringEffect(ef));
         tryAcquiringEffect($effect`Comic Violence`);
       },
       completed: () => get("_loveTunnelUsed") || !get("loveTunnelAvailable"),
       do: () =>
-        TunnelOfLove.fightAll(
-          "LOV Epaulettes",
-          "Open Heart Surgery",
-          "LOV Extraterrestrial Chocolate"
-        ),
+        TunnelOfLove.fightAll(LOVEquip, "Open Heart Surgery", "LOV Extraterrestrial Chocolate"),
       combat: new CombatStrategy().macro(
         Macro.if_($monster`LOV Enforcer`, Macro.attack().repeat())
           .if_(
             $monster`LOV Engineer`,
             Macro.while_(
               `!mpbelow ${mpCost($skill`Toynado`)} && hasskill ${toInt($skill`Toynado`)}`,
-              Macro.skill($skill`Toynado`)
+              Macro.skill($skill`Toynado`),
             )
               .while_(
                 `!mpbelow ${mpCost($skill`Saucestorm`)} && hasskill ${toInt($skill`Saucestorm`)}`,
-                Macro.skill($skill`Saucestorm`)
+                Macro.skill($skill`Saucestorm`),
               )
-              .default()
+              .default(),
           )
-          .if_($monster`LOV Equivocator`, Macro.default())
+          .if_($monster`LOV Equivocator`, Macro.default()),
       ),
       outfit: () => ({
         ...baseOutfit(false),
         weapon: $item`Fourth of May Cosplay Saber`,
+        modifier: `0.25 ${mainStatMaximizerStr}, 0.33 ML, -equip tinsel tights, -equip wad of used tape, -equip Kramco Sausage-o-Matic™`,
       }),
       limit: { tries: 1 },
       post: (): void => {
@@ -954,12 +1127,46 @@ export const LevelingQuest: Quest = {
     {
       name: "Monster Habitats",
       ready: () =>
-        get("_monsterHabitatsFightsLeft") > 0 &&
+        get("_monsterHabitatsFightsLeft") > 1 &&
         (haveFreeBanish() ||
           Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
       prepare: (): void => {
         restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
-        unbreakableUmbrella();
+        if (!haveEquipped($item`latte lovers member's mug`)) unbreakableUmbrella();
+        garbageShirt();
+        usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
+        restoreMp(50);
+      },
+      completed: () => get("_monsterHabitatsFightsLeft") <= 1,
+      do: $location`The Dire Warren`,
+      combat: new CombatStrategy().macro(() =>
+        Macro.if_($monster`fluffy bunny`, Macro.banish().abort()).default(useCinch),
+      ),
+      outfit: () => ({
+        ...baseOutfit,
+        ...(Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)
+          ? {}
+          : {
+              offhand: $item`latte lovers member's mug`,
+              acc1: $item`Kremlin's Greatest Briefcase`,
+              acc2: $item`Lil' Doctor™ bag`,
+            }),
+      }),
+      post: (): void => {
+        sendAutumnaton();
+        sellMiscellaneousItems();
+      },
+      limit: { tries: 13 },
+    },
+    {
+      name: "Monster Habitats (Re-application)",
+      ready: () =>
+        get("_monsterHabitatsFightsLeft") === 1 &&
+        (haveFreeBanish() ||
+          Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
+      prepare: (): void => {
+        restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
+        if (!haveEquipped($item`latte lovers member's mug`)) unbreakableUmbrella();
         garbageShirt();
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
         restoreMp(50);
@@ -967,23 +1174,31 @@ export const LevelingQuest: Quest = {
       completed: () => get("_monsterHabitatsFightsLeft") === 0,
       do: $location`The Dire Warren`,
       combat: new CombatStrategy().macro(() =>
-        Macro.if_($monster`fluffy bunny`, Macro.banish())
+        Macro.if_($monster`fluffy bunny`, Macro.banish().abort())
           .externalIf(
-            get("_monsterHabitatsFightsLeft") <= 1 &&
-              get("_monsterHabitatsRecalled") < 3 - get("instant_saveMonsterHabitats", 0) &&
+            get("_monsterHabitatsRecalled") < 3 - get("instant_saveMonsterHabitats", 0) &&
               have($skill`Recall Facts: Monster Habitats`) &&
               (haveFreeBanish() ||
                 Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
-            Macro.trySkill($skill`Recall Facts: Monster Habitats`)
+            Macro.trySkill($skill`Recall Facts: Monster Habitats`),
           )
-          .default(useCinch)
+          .default(useCinch),
       ),
-      outfit: baseOutfit,
+      outfit: () => ({
+        ...baseOutfit,
+        ...(Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)
+          ? {}
+          : {
+              offhand: $item`latte lovers member's mug`,
+              acc1: $item`Kremlin's Greatest Briefcase`,
+              acc2: $item`Lil' Doctor™ bag`,
+            }),
+      }),
       post: (): void => {
         sendAutumnaton();
         sellMiscellaneousItems();
       },
-      limit: { tries: 16 },
+      limit: { tries: 4 },
     },
     {
       name: "Backups",
@@ -1002,7 +1217,7 @@ export const LevelingQuest: Quest = {
         myBasestat($stat`Mysticality`) >= 220, // no longer need to back up Witchess Kings
       do: $location`The Dire Warren`,
       combat: new CombatStrategy().macro(
-        Macro.trySkill($skill`Back-Up to your Last Enemy`).default(useCinch)
+        Macro.trySkill($skill`Back-Up to your Last Enemy`).default(useCinch),
       ),
       outfit: () => ({
         ...baseOutfit(),
@@ -1039,8 +1254,8 @@ export const LevelingQuest: Quest = {
             have($skill`Recall Facts: Monster Habitats`) &&
             (haveFreeBanish() ||
               Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
-          Macro.trySkill($skill`Recall Facts: Monster Habitats`)
-        ).default(useCinch)
+          Macro.trySkill($skill`Recall Facts: Monster Habitats`),
+        ).default(useCinch),
       ),
       post: (): void => {
         sendAutumnaton();
@@ -1056,7 +1271,7 @@ export const LevelingQuest: Quest = {
         if (SourceTerminal.have()) cliExecute("terminal educate portscan");
       },
       completed: () =>
-        get("_speakeasyFreeFights", 0) >= 1 ||
+        get("_speakeasyFreeFights") >= 1 ||
         !get("ownsSpeakeasy") ||
         !have($skill`Map the Monsters`) ||
         get("_monstersMapped") >= 3,
@@ -1064,7 +1279,7 @@ export const LevelingQuest: Quest = {
       combat: new CombatStrategy().macro(
         Macro.trySkill($skill`Feel Envy`)
           .trySkill($skill`Portscan`)
-          .default()
+          .default(),
       ),
       outfit: baseOutfit,
       limit: { tries: 1 },
@@ -1082,7 +1297,7 @@ export const LevelingQuest: Quest = {
         if (SourceTerminal.have()) cliExecute("terminal educate portscan");
       },
       completed: () =>
-        get("_speakeasyFreeFights", 0) >= 2 ||
+        get("_speakeasyFreeFights") >= 2 ||
         !get("ownsSpeakeasy") ||
         !SourceTerminal.have() ||
         get("_sourceTerminalPortscanUses") > 0,
@@ -1102,7 +1317,7 @@ export const LevelingQuest: Quest = {
         unbreakableUmbrella();
         restoreMp(50);
       },
-      completed: () => get("_speakeasyFreeFights", 0) >= 3 || !get("ownsSpeakeasy"),
+      completed: () => get("_speakeasyFreeFights") >= 3 || !get("ownsSpeakeasy"),
       do: $location`An Unusually Quiet Barroom Brawl`,
 
       combat: new CombatStrategy().macro(
@@ -1180,8 +1395,8 @@ export const LevelingQuest: Quest = {
             have($skill`Recall Facts: Monster Habitats`) &&
             (haveFreeBanish() ||
               Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
-          Macro.trySkill($skill`Recall Facts: Monster Habitats`)
-        ).default(useCinch)
+          Macro.trySkill($skill`Recall Facts: Monster Habitats`),
+        ).default(useCinch),
       ),
       outfit: baseOutfit,
       post: (): void => {
@@ -1216,7 +1431,7 @@ export const LevelingQuest: Quest = {
       completed: () =>
         myBasestat($stat`Mysticality`) >= 165 &&
         (haveCBBIngredients(false) ||
-          overlevelled() ||
+          overleveled() ||
           craftedCBBEffects.some((ef) => have(ef)) ||
           craftedCBBEffects.every((ef) => forbiddenEffects.includes(ef))) &&
         (powerlevelingLocation() !== $location`The Neverending Party` ||
@@ -1251,7 +1466,7 @@ export const LevelingQuest: Quest = {
           .tryItem($item`blue rocket`)
           .trySkill($skill`Bowl Sideways`)
           .trySkill($skill`Recall Facts: %phylum Circadian Rhythms`)
-          .default(useCinch)
+          .default(useCinch),
       ),
       post: (): void => {
         haveCBBIngredients(false, true);
@@ -1311,7 +1526,7 @@ export const LevelingQuest: Quest = {
       do: (): void => {
         if (myMeat() < 500) throw new Error("Insufficient Meat to purchase Bee's Knees!");
         tryAcquiringEffect($effect`Ode to Booze`);
-        visitUrl(`clan_viplounge.php?preaction=speakeasydrink&drink=5&pwd=${+myHash()}`); // Bee's Knees
+        visitUrl(`clan_viplounge.php?preaction=speakeasydrink&drink=5&pwd=${myHash()}`); // Bee's Knees
       },
       limit: { tries: 1 },
     },
@@ -1322,6 +1537,122 @@ export const LevelingQuest: Quest = {
         tryAcquiringEffect($effect`Favored by Lyle`);
         tryAcquiringEffect($effect`Starry-Eyed`);
         wishFor($effect`A Contender`);
+      },
+      limit: { tries: 1 },
+    },
+    {
+      name: "Apriling Band Quad Tom Sandworms",
+      completed: () => !have($item`Apriling band quad tom`) || get("_aprilBandTomUses") >= 3,
+      do: (): void => {
+        cliExecute("aprilband play quad");
+        visitUrl("main.php");
+      },
+      combat: new CombatStrategy().macro(Macro.default(useCinch)),
+      outfit: baseOutfit,
+      post: (): void => {
+        sendAutumnaton();
+        sellMiscellaneousItems();
+      },
+      limit: { tries: 3 },
+    },
+    {
+      name: "Mimic Sausage Goblins",
+      completed: () =>
+        get("instant_saveMimicEggs", false) ||
+        get("_mimicEggsObtained") > 0 ||
+        !have($familiar`Chest Mimic`) ||
+        (!(have($familiar`Shorter-Order Cook`) && have($item`blue plate`)) &&
+          !(have($item`Apriling band piccolo`) && get("_aprilBandPiccoloUses") < 3)),
+      do: (): void => {
+        const currentFamiliar = myFamiliar();
+        if (have($familiar`Shorter-Order Cook`) && have($item`blue plate`)) {
+          useFamiliar($familiar`Shorter-Order Cook`);
+          equip($slot`familiar`, $item`blue plate`);
+        }
+        useFamiliar($familiar`Chest Mimic`);
+        if (have($item`Apriling band piccolo`) && get("_aprilBandPiccoloUses") < 3) {
+          retrieveItem($item`Apriling band piccolo`); // We can't play the piccolo if it's equipped on a non-current familiar
+          Array(3 - get("_aprilBandPiccoloUses"))
+            .fill(0)
+            .forEach(() => cliExecute("aprilband play picc"));
+        }
+        visitUrl(`place.php?whichplace=town_right&action=townright_dna`);
+        visitUrl(`choice.php?pwd&whichchoice=1517&mid=${$monster`sausage goblin`.id}&option=2`);
+        useFamiliar(currentFamiliar);
+        visitUrl(`choice.php?pwd&whichchoice=1516&mid=${$monster`sausage goblin`.id}&option=1`);
+      },
+      combat: new CombatStrategy().macro(() =>
+        Macro.externalIf(
+          get("_monsterHabitatsFightsLeft") <= 1 &&
+            get("_monsterHabitatsRecalled") < 3 - get("instant_saveMonsterHabitats", 0) &&
+            have($skill`Recall Facts: Monster Habitats`) &&
+            (haveFreeBanish() ||
+              Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
+          Macro.trySkill($skill`Recall Facts: Monster Habitats`),
+        ).default(useCinch),
+      ),
+      outfit: baseOutfit,
+      post: (): void => {
+        sendAutumnaton();
+        sellMiscellaneousItems();
+      },
+      limit: { tries: 1 },
+    },
+    {
+      name: "Apriling Band Quad Tom Sandworms",
+      completed: () => !have($item`Apriling band quad tom`) || get("_aprilBandTomUses") >= 3,
+      do: (): void => {
+        cliExecute("aprilband play quad");
+        visitUrl("main.php");
+      },
+      combat: new CombatStrategy().macro(Macro.default(useCinch)),
+      outfit: baseOutfit,
+      post: (): void => {
+        sendAutumnaton();
+        sellMiscellaneousItems();
+      },
+      limit: { tries: 3 },
+    },
+    {
+      name: "Mimic Sausage Goblins",
+      completed: () =>
+        get("instant_saveMimicEggs", false) ||
+        get("_mimicEggsObtained") > 0 ||
+        !have($familiar`Chest Mimic`) ||
+        (!(have($familiar`Shorter-Order Cook`) && have($item`blue plate`)) &&
+          !(have($item`Apriling band piccolo`) && get("_aprilBandPiccoloUses") < 3)),
+      do: (): void => {
+        const currentFamiliar = myFamiliar();
+        if (have($familiar`Shorter-Order Cook`) && have($item`blue plate`)) {
+          useFamiliar($familiar`Shorter-Order Cook`);
+          equip($slot`familiar`, $item`blue plate`);
+        }
+        useFamiliar($familiar`Chest Mimic`);
+        if (have($item`Apriling band piccolo`) && get("_aprilBandPiccoloUses") < 3) {
+          retrieveItem($item`Apriling band piccolo`); // We can't play the piccolo if it's equipped on a non-current familiar
+          Array(3 - get("_aprilBandPiccoloUses"))
+            .fill(0)
+            .forEach(() => cliExecute("aprilband play picc"));
+        }
+        visitUrl(`place.php?whichplace=town_right&action=townright_dna`);
+        visitUrl(`choice.php?pwd&whichchoice=1517&mid=${$monster`sausage goblin`.id}&option=2`);
+        useFamiliar(currentFamiliar);
+        visitUrl(`choice.php?pwd&whichchoice=1516&mid=${$monster`sausage goblin`.id}&option=1`);
+      },
+      combat: new CombatStrategy().macro(() =>
+        Macro.externalIf(
+          get("_monsterHabitatsFightsLeft") <= 1 &&
+            get("_monsterHabitatsRecalled") < 3 - get("instant_saveMonsterHabitats", 0) &&
+            have($skill`Recall Facts: Monster Habitats`) &&
+            (haveFreeBanish() ||
+              Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
+          Macro.trySkill($skill`Recall Facts: Monster Habitats`),
+        ).default(useCinch),
+      ),
+      outfit: baseOutfit,
+      post: (): void => {
+        sendAutumnaton();
+        sellMiscellaneousItems();
       },
       limit: { tries: 1 },
     },
@@ -1373,7 +1704,7 @@ export const LevelingQuest: Quest = {
       combat: new CombatStrategy().macro(
         Macro.trySkill($skill`Curse of Weaksauce`)
           .attack()
-          .repeat()
+          .repeat(),
       ),
       outfit: {
         ...baseOutfit(),
@@ -1446,8 +1777,8 @@ export const LevelingQuest: Quest = {
             have($skill`Recall Facts: Monster Habitats`) &&
             (haveFreeBanish() ||
               Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
-          Macro.trySkill($skill`Recall Facts: Monster Habitats`)
-        ).default(useCinch)
+          Macro.trySkill($skill`Recall Facts: Monster Habitats`),
+        ).default(useCinch),
       ),
       outfit: baseOutfit,
       post: (): void => {
@@ -1486,7 +1817,7 @@ export const LevelingQuest: Quest = {
         myBasestat($stat`Mysticality`) >= 213 &&
         (get("_shatteringPunchUsed") >= 3 || !have($skill`Shattering Punch`)) &&
         (get("_gingerbreadMobHitUsed") || !have($skill`Gingerbread Mob Hit`)) &&
-        (haveCBBIngredients(true) || overlevelled()),
+        (haveCBBIngredients(true) || overleveled()),
       do: powerlevelingLocation(),
       combat: new CombatStrategy().macro(
         Macro.trySkill($skill`Feel Pride`)
@@ -1498,7 +1829,7 @@ export const LevelingQuest: Quest = {
           .trySkill($skill`Shattering Punch`)
           .trySkill($skill`Gingerbread Mob Hit`)
           .trySkill($skill`Bowl Sideways`)
-          .default(useCinch)
+          .default(useCinch),
       ),
       choices: {
         1094: 5,
@@ -1532,7 +1863,31 @@ export const LevelingQuest: Quest = {
         burnLibram(500);
         refillLatte();
       },
-      limit: { tries: 20 },
+      limit: { tries: 22 },
+    },
+    {
+      name: "Open wardrobe-o-matic", // Assume we won't be leveling any more, even in aftercore, for the rest of the day
+      completed: () =>
+        !have($item`wardrobe-o-matic`) ||
+        $items`futuristic shirt, futuristic hat, futuristic collar`.some((it) => have(it)),
+      do: () => use($item`wardrobe-o-matic`),
+      limit: { tries: 1 },
+    },
+    {
+      name: "Craft and Eat CBB Foods Post",
+      after: ["Free Kills and More Fights"],
+      completed: () =>
+        craftedCBBEffectsPost.every((ef) => have(ef) || forbiddenEffects.includes(ef)),
+      do: (): void => {
+        craftedCBBFoodsPost.forEach((it) => {
+          const ef = effectModifier(it, "effect");
+          if (!have(ef) && !forbiddenEffects.includes(ef)) {
+            if (!have(it)) create(it, 1);
+            eat(it, 1);
+          }
+        });
+      },
+      limit: { tries: 1 },
     },
     {
       name: "Craft and Eat CBB Foods Post",

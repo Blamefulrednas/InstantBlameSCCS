@@ -21,9 +21,11 @@ import {
   have,
   uneffect,
 } from "libram";
-import { logTestSetup, tryAcquiringEffect, wishFor } from "../lib";
+import { handleCustomPulls, logTestSetup, tryAcquiringEffect, wishFor } from "../lib";
 import { CombatStrategy } from "grimoire-kolmafia";
 import Macro from "../combat";
+
+const comTestMaximizerString = "-combat";
 
 export const NoncombatQuest: Quest = {
   name: "Noncombat",
@@ -74,12 +76,14 @@ export const NoncombatQuest: Quest = {
         const usefulEffects: Effect[] = [
           $effect`A Rose by Any Other Material`,
           $effect`Feeling Lonely`,
+          $effect`Feeling Sneaky`,
           $effect`Gummed Shoes`,
           $effect`Invisible Avatar`,
           $effect`Silent Running`,
           $effect`Smooth Movements`,
           $effect`The Sonata of Sneakiness`,
           $effect`Throwing Some Shade`,
+          $effect`Ultra-Soft Steps`,
 
           // Famwt for Disgeist
           $effect`Blood Bond`,
@@ -88,13 +92,18 @@ export const NoncombatQuest: Quest = {
           $effect`Puzzle Champ`,
         ];
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef, true));
-        cliExecute("maximize -combat"); // To avoid maximizer bug, we invoke this once more
+        if (!handleCustomPulls("instant_comTestPulls", comTestMaximizerString)) {
+          cliExecute("maximize -combat"); // To avoid maximizer bug, we invoke this once more
+        }
 
         if (
+          // Seems to be a bug where numericModifier doesn't recognize the -10 granted by an unbreakable umbrella, so check for that manually
           have($skill`Aug. 13th: Left/Off Hander's Day!`) &&
           !get("instant_saveAugustScepter", false) &&
-          numericModifier(equippedItem($slot`off-hand`), "Combat Rate") < 0 &&
-          CommunityService.Noncombat.actualCost() > 1
+          (numericModifier(equippedItem($slot`off-hand`), "Combat Rate") < 0 ||
+            equippedItem($slot`off-hand`) === $item`unbreakable umbrella`) &&
+          CommunityService.Noncombat.actualCost() > 1 &&
+          CommunityService.FamiliarWeight.isDone() // Only do this after the famwt test is done (if it isn't, we really shouldn't have shifted NC before famwt)
         ) {
           tryAcquiringEffect($effect`Offhand Remarkable`);
         }
@@ -111,14 +120,14 @@ export const NoncombatQuest: Quest = {
           print("Manually complete the test if you think this is fine.", "red");
           print(
             "You may also increase the turn limit by typing 'set instant_comTestTurnLimit=<new limit>'",
-            "red"
+            "red",
           );
         }
         CommunityService.Noncombat.run(() => logTestSetup(CommunityService.Noncombat), maxTurns);
       },
       outfit: {
         familiar: $familiar`Disgeist`,
-        modifier: "-combat",
+        modifier: comTestMaximizerString,
       },
       post: (): void => {
         uneffect($effect`The Sonata of Sneakiness`);

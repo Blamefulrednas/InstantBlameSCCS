@@ -13,7 +13,7 @@ import { computeCombatFrequency, convertMilliseconds, simpleDateDiff } from "./l
 import { get, set, sinceKolmafiaRevision } from "libram";
 import { Engine } from "./engine/engine";
 import { Args, getTasks } from "grimoire-kolmafia";
-import { Task } from "./engine/task";
+import { Quest, Task } from "./engine/task";
 import { HPQuest, MoxieQuest, MuscleQuest, MysticalityQuest } from "./tasks/stat";
 import { LevelingQuest } from "./tasks/leveling";
 import { CoilWireQuest } from "./tasks/coilwire";
@@ -73,10 +73,14 @@ export function main(command?: string): void {
   visitUrl("main.php");
   cliExecute("refresh all");
 
+  // This does not factor in Offhand Remarkable, since if we do have it
+  // we want to be able to benefit from it in the sdmg and wdmg tests
+  // Running fam test -> NC test allows us to use OHR in the NC test and carry it on into the subsequent tests
+  // Running NC test -> fam test would result in the OHR (obtained in the NC test) potentially being completely burnt in the fam test
   const swapFamAndNCTests =
     !get("instant_skipAutomaticOptimizations", false) && computeCombatFrequency() <= -95;
 
-  const tasks: Task[] = getTasks([
+  const questList: Quest[] = [
     RunStartQuest,
     CoilWireQuest,
     LevelingQuest,
@@ -91,7 +95,12 @@ export function main(command?: string): void {
     WeaponDamageQuest,
     SpellDamageQuest,
     DonateQuest,
-  ]);
+  ];
+  const tasks: Task[] = getTasks(questList);
+
+  print("Running the Quests in the following order:", "blue");
+  questList.forEach((quest) => print(quest.name, "blue"));
+
   const engine = new Engine(tasks);
   try {
     setAutoAttack(0);
@@ -113,10 +122,10 @@ export function main(command?: string): void {
       `Time: ${convertMilliseconds(
         simpleDateDiff(
           get(timeProperty, nowToString("yyyyMMddhhmmssSSS")),
-          nowToString("yyyyMMddhhmmssSSS")
-        )
+          nowToString("yyyyMMddhhmmssSSS"),
+        ),
       )} since first run today started`,
-      "purple"
+      "purple",
     );
     set(timeProperty, -1);
   } finally {

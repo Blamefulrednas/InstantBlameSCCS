@@ -6,19 +6,26 @@ import {
   elementalResistance,
   equip,
   equippedItem,
+  haveEquipped,
   inebrietyLimit,
   myAdventures,
+  myBasestat,
+  myClass,
   myHp,
   myInebriety,
   myMaxhp,
+  myThrall,
   numericModifier,
+  outfit,
   print,
   restoreHp,
   restoreMp,
   retrieveItem,
   useSkill,
+  visitUrl,
 } from "kolmafia";
 import {
+  $class,
   $effect,
   $effects,
   $element,
@@ -28,6 +35,8 @@ import {
   $location,
   $skill,
   $slot,
+  $stat,
+  $thrall,
   clamp,
   Clan,
   CommunityService,
@@ -35,12 +44,19 @@ import {
   have,
 } from "libram";
 import { Quest } from "../engine/task";
-import { logTestSetup, startingClan, tryAcquiringEffect } from "../lib";
+import {
+  handleCustomPulls,
+  logTestSetup,
+  motherSlimeClan,
+  startingClan,
+  tryAcquiringEffect,
+} from "../lib";
 import Macro, { haveFreeBanish, haveMotherSlimeBanish } from "../combat";
 import { chooseFamiliar, sugarItemsAboutToBreak } from "../engine/outfit";
 import { forbiddenEffects } from "../resources";
 
 let triedDeepDark = false;
+const spellTestMaximizerString = "spell dmg, switch disembodied hand, -switch left-hand man";
 
 export const SpellDamageQuest: Quest = {
   name: "Spell Damage",
@@ -53,6 +69,16 @@ export const SpellDamageQuest: Quest = {
       limit: { tries: 1 },
     },
     {
+      name: "Cargo Shorts",
+      ready: () => !get("instant_saveCargoShorts", false),
+      completed: () => get("_cargoPocketEmptied") || !have($item`Cargo Cultist Shorts`),
+      do: (): void => {
+        visitUrl("inventory.php?action=pocket");
+        visitUrl("choice.php?whichchoice=1420&option=1&pocket=177");
+      },
+      limit: { tries: 1 },
+    },
+    {
       name: "Carol Ghost Buff",
       prepare: (): void => {
         restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
@@ -62,7 +88,7 @@ export const SpellDamageQuest: Quest = {
         !have($familiar`Ghost of Crimbo Carols`) ||
         !haveFreeBanish() ||
         $effects`Do You Crush What I Crush?, Holiday Yoked, Let It Snow/Boil/Stink/Frighten/Grease, All I Want For Crimbo Is Stuff, Crimbo Wrapping`.some(
-          (ef) => have(ef)
+          (ef) => have(ef),
         ),
       do: $location`The Dire Warren`,
       combat: new CombatStrategy().macro(Macro.banish().abort()),
@@ -80,18 +106,18 @@ export const SpellDamageQuest: Quest = {
       prepare: (): void => {
         restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
         restoreMp(50);
-        Clan.join(get("instant_motherSlimeClan", ""));
+        Clan.join(motherSlimeClan);
       },
       completed: () =>
         !have($familiar`Machine Elf`) ||
         !haveMotherSlimeBanish() ||
         have($effect`Inner Elf`) ||
-        get("instant_motherSlimeClan", "").length === 0,
+        motherSlimeClan === "",
       do: $location`The Slime Tube`,
       combat: new CombatStrategy().macro(
         Macro.trySkill($skill`KGB tranquilizer dart`)
           .trySkill($skill`Snokebomb`)
-          .abort()
+          .abort(),
       ),
       choices: { 326: 1 },
       outfit: {
@@ -115,7 +141,7 @@ export const SpellDamageQuest: Quest = {
         Macro.trySkill($skill`Meteor Shower`)
           .trySkill($skill`%fn, spit on me!`)
           .trySkill($skill`Use the Force`)
-          .abort()
+          .abort(),
       ),
       outfit: () => ({
         weapon: $item`Fourth of May Cosplay Saber`,
@@ -146,6 +172,25 @@ export const SpellDamageQuest: Quest = {
       limit: { tries: 1 },
     },
     {
+      name: "Stick-Knife Trick",
+      ready: () =>
+        get("instant_stickKnifeOutfit") !== "" &&
+        myClass() === $class`Pastamancer` &&
+        have($item`Stick-Knife of Loathing`) &&
+        (have($skill`Bind Undead Elbow Macaroni`) || myThrall() === $thrall`Undead Elbow Macaroni`),
+      completed: () =>
+        haveEquipped($item`Stick-Knife of Loathing`) ||
+        have($familiar`Disembodied Hand`) ||
+        myBasestat($stat`Mysticality`) < 150 ||
+        myBasestat($stat`Muscle`) >= 150,
+      do: (): void => {
+        if (myThrall() !== $thrall`Undead Elbow Macaroni`)
+          useSkill($skill`Bind Undead Elbow Macaroni`);
+        outfit(get("instant_stickKnifeOutfit"));
+      },
+      limit: { tries: 1 },
+    },
+    {
       name: "Test",
       prepare: (): void => {
         if (!have($item`obsidian nutcracker`)) buy($item`obsidian nutcracker`, 1);
@@ -165,12 +210,14 @@ export const SpellDamageQuest: Quest = {
           $effect`Mental A-cue-ity`,
           $effect`Pisces in the Skyces`,
           $effect`Song of Sauce`,
+          $effect`Sigils of Yeg`,
           $effect`Spirit of Peppermint`,
           $effect`The Magic of LOV`,
           $effect`Warlock, Warstock, and Warbarrel`,
           $effect`We're All Made of Starfish`,
         ];
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef, true));
+        handleCustomPulls("instant_spellTestPulls", spellTestMaximizerString);
 
         const wines = $items`Sacramento wine, distilled fortified wine`;
         while (
@@ -203,15 +250,15 @@ export const SpellDamageQuest: Quest = {
           print("Manually complete the test if you think this is fine.", "red");
           print(
             "You may also increase the turn limit by typing 'set instant_spellTestTurnLimit=<new limit>'",
-            "red"
+            "red",
           );
         }
         CommunityService.SpellDamage.run(
           () => logTestSetup(CommunityService.SpellDamage),
-          maxTurns
+          maxTurns,
         );
       },
-      outfit: { modifier: "spell dmg, switch disembodied hand, -switch left-hand man" },
+      outfit: { modifier: spellTestMaximizerString },
       post: (): void => {
         if (have($skill`Spirit of Nothing`)) useSkill($skill`Spirit of Nothing`);
         if (have($familiar`Left-Hand Man`)) equip($familiar`Left-Hand Man`, $item.none);
