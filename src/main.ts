@@ -43,8 +43,8 @@ export const args = Args.create("instantSCCS", "An automated low-shiny SCCS scri
 });
 
 export function main(command?: string): void {
-  sinceKolmafiaRevision(27637);
-  // checkGithubVersion();
+  sinceKolmafiaRevision(27930);
+  checkGithubVersion();
 
   Args.fill(args, command);
   if (args.help) {
