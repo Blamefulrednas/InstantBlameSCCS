@@ -128,7 +128,7 @@ const freeFightMonsters: Monster[] = $monsters`Witchess Bishop, Witchess King, W
 const craftedCBBFoods: Item[] = $items`honey bun of Boris, roasted vegetable of Jarlsberg, plain calzone`;
 const craftedCBBFoodsPost: Item[] = $items`Pete's rich ricotta`;
 const craftedCBBEffectsPost: Effect[] = craftedCBBFoodsPost.map((it) =>
-  effectModifier(it, "effect")
+  effectModifier(it, "effect"),
 );
 const craftedCBBEffects: Effect[] = craftedCBBFoods.map((it) => effectModifier(it, "effect"));
 let triedCraftingCBBFoods = false;
@@ -895,10 +895,15 @@ export const LevelingQuest: Quest = {
         Macro.tryItem($item`red rocket`)
           .tryItem($item`blue rocket`)
           .trySkill($skill`Recall Facts: %phylum Circadian Rhythms`)
+          .trySkill($skill`Surprisingly Sweet Slash`)
+          .trySkill($skill`Surprisingly Sweet Stab`)
           .default(useCinch),
       ),
-      outfit: baseOutfit,
-      weapon: $item`candy cane sword cane`,
+
+      outfit: () => ({
+        ...baseOutfit(false),
+        weapon: $item`candy cane sword cane`,
+      }),
       post: (): void => {
         if (have(rufusTarget() as Item)) {
           withChoice(1498, 1, () => use($item`closed-circuit pay phone`));
@@ -1214,7 +1219,7 @@ export const LevelingQuest: Quest = {
         !have($item`backup camera`) ||
         !freeFightMonsters.includes(get("lastCopyableMonster") ?? $monster.none) ||
         get("_backUpUses") >= 11 - clamp(get("instant_saveBackups", 0), 0, 11) ||
-        myBasestat($stat`Mysticality`) >= 220, // no longer need to back up Witchess Kings
+        myBasestat($stat`Mysticality`) >= 210, // no longer need to back up Witchess Kings
       do: $location`The Dire Warren`,
       combat: new CombatStrategy().macro(
         Macro.trySkill($skill`Back-Up to your Last Enemy`).default(useCinch),
@@ -1323,8 +1328,8 @@ export const LevelingQuest: Quest = {
       combat: new CombatStrategy().macro(
         Macro.if_(
           $monster`goblin flapper`,
-          Macro.trySkill($skill`Fire Extinguisher: Polar Vortex`).default()
-        ).default()
+          Macro.trySkill($skill`Fire Extinguisher: Polar Vortex`).default(),
+        ).default(),
       ),
       outfit: baseOutfit,
       limit: { tries: 3 },
@@ -1429,7 +1434,7 @@ export const LevelingQuest: Quest = {
     {
       name: "Powerlevel",
       completed: () =>
-        myBasestat($stat`Mysticality`) >= 165 &&
+        myBasestat($stat`Mysticality`) >= 145 &&
         (haveCBBIngredients(false) ||
           overleveled() ||
           craftedCBBEffects.some((ef) => have(ef)) ||
@@ -1814,7 +1819,7 @@ export const LevelingQuest: Quest = {
           };
       },
       completed: () =>
-        myBasestat($stat`Mysticality`) >= 213 &&
+        myBasestat($stat`Mysticality`) >= 210 &&
         (get("_shatteringPunchUsed") >= 3 || !have($skill`Shattering Punch`)) &&
         (get("_gingerbreadMobHitUsed") || !have($skill`Gingerbread Mob Hit`)) &&
         (haveCBBIngredients(true) || overleveled()),
