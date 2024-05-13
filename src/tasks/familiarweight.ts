@@ -28,15 +28,19 @@ import {
   get,
   have,
 } from "libram";
-import { Quest } from "../engine/task";
-import { handleCustomPulls, logTestSetup, tryAcquiringEffect } from "../lib";
 import Macro from "../combat";
 import {
   avoidDaylightShavingsHelm,
   chooseFamiliar,
-  chooseHeaviestFamiliar,
   sugarItemsAboutToBreak,
 } from "../engine/outfit";
+import { Quest } from "../engine/task";
+import {
+  chooseHeaviestEquippedFamiliar,
+  handleCustomPulls,
+  logTestSetup,
+  tryAcquiringEffect,
+} from "../lib";
 
 const famTestMaximizerString = "familiar weight";
 
@@ -122,8 +126,9 @@ export const FamiliarWeightQuest: Quest = {
             $item`love song of icy revenge`,
           );
 
-        const heaviestWeight =
-          familiarWeight(chooseHeaviestFamiliar()) + (have($item`astral pet sweater`) ? 10 : 0);
+        const heaviestWeight = chooseHeaviestEquippedFamiliar(
+          $familiars``.filter((f) => f !== $familiar`Homemade Robot`),
+        ).expectedWeight;
         const commaWeight = 6 + 11 * get("homemadeRobotUpgrades");
         const useComma =
           $familiars`Comma Chameleon, Homemade Robot`.every((fam) => have(fam)) &&
@@ -212,7 +217,12 @@ export const FamiliarWeightQuest: Quest = {
           maxTurns,
         );
       },
-      outfit: () => ({ modifier: famTestMaximizerString, familiar: chooseHeaviestFamiliar() }),
+      outfit: () => ({
+        modifier: famTestMaximizerString,
+        familiar: chooseHeaviestEquippedFamiliar(
+          $familiars``.filter((f) => f !== $familiar`Homemade Robot`),
+        ).familiar,
+      }),
       limit: { tries: 1 },
     },
   ],

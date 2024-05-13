@@ -44,6 +44,7 @@ import {
   $coinmaster,
   $effect,
   $familiar,
+  $familiars,
   $item,
   $items,
   $location,
@@ -81,6 +82,7 @@ import {
   chooseFamiliar,
   cookbookbat,
   melodramedary,
+  sombrero,
   unbreakableUmbrella,
 } from "../engine/outfit";
 import { excludedFamiliars } from "../resources";
@@ -542,7 +544,8 @@ export const RunStartQuest: Quest = {
         let piccoloValue = 1; // +10 famwt, +120 famxp (potentially great for chest mimic)
 
         // If we aren't using the CBB nor melodramedary, we probably have enough fam turns
-        if (!cookbookbat() && !melodramedary()) quadTomValue -= 10;
+        if (cookbookbat() === $familiar.none && melodramedary() === $familiar.none)
+          quadTomValue -= 10;
 
         // If we can saber run with extinguisher, the hot res is probably not very useful
         if (have($item`Fourth of May Cosplay Saber`) && have($item`industrial fire extinguisher`))
@@ -551,7 +554,9 @@ export const RunStartQuest: Quest = {
         // If we can benefit greatly from the famxp, we should highly prioritize the piccolo
         // (to consider: but it isn't very useful if we already have other copyable sources available [e.g. kramco])
         const canUseMimic =
-          have($familiar`Chest Mimic`) && excludedFamiliars.includes(toInt($familiar`Chest Mimic`));
+          have($familiar`Chest Mimic`) &&
+          !excludedFamiliars.includes(toInt($familiar`Chest Mimic`)) &&
+          !get("instant_saveMimicEggs", false);
         const canUseCopier =
           (have($item`backup camera`) && get("instant_saveBackups", 0) < 11) ||
           (have($skill`Recall Facts: Monster Habitats`) &&
@@ -580,6 +585,32 @@ export const RunStartQuest: Quest = {
             const instrument = it.name.split("Apriling band ")[1].split(" ")[0];
             cliExecute(`aprilband item ${instrument}`);
           }); // Acquire the instrument
+      },
+      limit: { tries: 1 },
+    },
+    {
+      name: "Mayam Calendar (Pre-coil)",
+      completed: () =>
+        get("instant_saveMayamCalendar", false) ||
+        get("_mayamSymbolsUsed").includes("clock") ||
+        !have($item`Mayam Calendar`),
+      do: (): void => {
+        if (
+          have($familiar`Chest Mimic`) &&
+          !excludedFamiliars.includes(toInt($familiar`Chest Mimic`)) &&
+          !get("instant_saveMimicEggs", false)
+        ) {
+          useFamiliar($familiar`Chest Mimic`);
+        } else if (sombrero() !== $familiar.none) {
+          useFamiliar(sombrero());
+        } else {
+          // Choose a potentially useful familiar
+          const potentialFamiliars =
+            $familiars`Comma Chameleon, Mini-Trainbot, Exotic Parrot`.filter(have);
+          useFamiliar(potentialFamiliars.at(0) ?? chooseFamiliar());
+        }
+        const sym2 = mainStat === $stat`Mysticality` ? "meat" : "yam";
+        cliExecute(`mayam rings fur ${sym2} yam clock`);
       },
       limit: { tries: 1 },
     },
