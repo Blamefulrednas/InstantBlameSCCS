@@ -41,7 +41,7 @@ import {
   SongBoom,
 } from "libram";
 import Macro, { haveFreeBanish, haveMotherSlimeBanish } from "../combat";
-import { chooseFamiliar, sugarItemsAboutToBreak } from "../engine/outfit";
+import { sugarItemsAboutToBreak } from "../outfit";
 import { Quest } from "../engine/task";
 import {
   handleCustomPulls,
@@ -53,6 +53,7 @@ import {
 } from "../lib";
 import { powerlevelingLocation } from "./leveling";
 import { forbiddenEffects } from "../resources";
+import { chooseFamiliar } from "../familiars";
 
 const attemptKFH = have($skill`Kung Fu Hustler`) && have($familiar`Disembodied Hand`);
 const wpnTestMaximizerString = "weapon dmg, switch disembodied hand, -switch left-hand man";
@@ -79,7 +80,8 @@ export const WeaponDamageQuest: Quest = {
       completed: () =>
         have($item`potion of potency`) ||
         have($effect`Pronounced Potency`) ||
-        !have($item`scrumptious reagent`),
+        !have($item`scrumptious reagent`) ||
+        !have($item`orange`),
       do: () => create($item`potion of potency`, 1),
       limit: { tries: 1 },
     },
@@ -192,15 +194,14 @@ export const WeaponDamageQuest: Quest = {
         get("instant_stickKnifeOutfit") !== "" &&
         myClass() === $class`Pastamancer` &&
         have($item`Stick-Knife of Loathing`) &&
-        (have($skill`Bind Undead Elbow Macaroni`) || myThrall() === $thrall`Undead Elbow Macaroni`),
+        (have($skill`Bind Undead Elbow Macaroni`) || myThrall() === $thrall`Elbow Macaroni`),
       completed: () =>
         haveEquipped($item`Stick-Knife of Loathing`) ||
         have($familiar`Disembodied Hand`) ||
         myBasestat($stat`Mysticality`) < 150 ||
         myBasestat($stat`Muscle`) >= 150,
       do: (): void => {
-        if (myThrall() !== $thrall`Undead Elbow Macaroni`)
-          useSkill($skill`Bind Undead Elbow Macaroni`);
+        if (myThrall() !== $thrall`Elbow Macaroni`) useSkill($skill`Bind Undead Elbow Macaroni`);
         outfit(get("instant_stickKnifeOutfit"));
       },
       limit: { tries: 1 },

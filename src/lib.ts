@@ -11,6 +11,7 @@ import {
   familiarWeight,
   getCampground,
   getClanName,
+  getMonsters,
   gitInfo,
   haveEffect,
   haveEquipped,
@@ -18,6 +19,9 @@ import {
   inHardcore,
   Item,
   itemAmount,
+  itemDrops,
+  Location,
+  mallPrice,
   monkeyPaw,
   mpCost,
   myBasestat,
@@ -50,11 +54,13 @@ import {
   $familiar,
   $item,
   $items,
+  $location,
   $monster,
   $skill,
   $skills,
   $slot,
   $stat,
+  AutumnAton,
   Clan,
   CombatLoversLocket,
   CommunityService,
@@ -64,11 +70,13 @@ import {
   haveInCampground,
   maxBy,
   set,
+  sum,
   sumNumbers,
   Witchess,
 } from "libram";
 import { printModtrace } from "libram/dist/modifier";
 import { excludedFamiliars, forbiddenEffects } from "./resources";
+import { chooseRift } from "libram/dist/resources/2023/ClosedCircuitPayphone";
 
 export const startingClan = getClanName();
 export const motherSlimeClan = Clan.getWhitelisted().find(
@@ -78,6 +86,8 @@ export const motherSlimeClan = Clan.getWhitelisted().find(
   : Clan.getWhitelisted().find((c) => c.name.toLowerCase() === "csloopers unite")
     ? "CSLoopers Unite"
     : "";
+export const useParkaSpit = have($item`Fourth of May Cosplay Saber`) && have($skill`Feel Envy`);
+export const useCenser = have($item`Sept-Ember Censer`) && !get("instant_saveEmbers", false);
 
 export const testModifiers = new Map([
   [CommunityService.HP, ["Maximum HP", "Maximum HP Percent", "Muscle", "Muscle Percent"]],
@@ -401,6 +411,7 @@ export const synthExpBuff =
       : $effect`Synthesis: Style`;
 
 export const complexCandies = $items``.filter((candy) => candy.candyType === "complex");
+export const simpleCandies = $items``.filter((candy) => candy.candyType === "simple");
 const peppermintCandiesCosts = new Map<Item, number>([
   [$item`peppermint sprout`, 1],
   [$item`peppermint twist`, 1],
@@ -433,21 +444,43 @@ function haveCandies(a: Item, b: Item): boolean {
   return Array.from(candiesRequired.values()).every((val) => val === 1);
 }
 
-const rem = mainStat === $stat`Muscle` ? 2 : mainStat === $stat`Mysticality` ? 3 : 4;
-const complexCandyPairs = complexCandies
-  .map((a, i) => complexCandies.slice(i).map((b) => [a, b]))
-  .reduce((acc, val) => acc.concat(val), [])
-  .filter(([a, b]) => (toInt(a) + toInt(b)) % 5 === rem);
-
-export function getValidComplexCandyPairs(): Item[][] {
-  return complexCandyPairs.filter(([a, b]) => haveCandies(a, b));
+function complexCandyPairs(rem: number): Item[][] {
+  return complexCandies
+    .map((a, i) => complexCandies.slice(i).map((b) => [a, b]))
+    .reduce((acc, val) => acc.concat(val), [])
+    .filter(([a, b]) => (toInt(a) + toInt(b)) % 5 === rem);
 }
 
-export function getSynthExpBuff(): void {
-  const filteredComplexCandyPairs = getValidComplexCandyPairs();
-  if (filteredComplexCandyPairs.length === 0) return;
+function simpleCandyPairs(rem: number): Item[][] {
+  return simpleCandies
+    .map((a, i) => simpleCandies.slice(i).map((b) => [a, b]))
+    .reduce((acc, val) => acc.concat(val), [])
+    .filter(([a, b]) => (toInt(a) + toInt(b)) % 5 === rem);
+}
 
-  const bestPair = filteredComplexCandyPairs.reduce((left, right) =>
+// function simpleComplexCandyPairs(rem: number): Item[][] {
+//   return simpleCandies
+//     .map((a, i) => complexCandies.slice(i).map((b) => [a, b]))
+//     .reduce((acc, val) => acc.concat(val), [])
+//     .filter(([a, b]) => (toInt(a) + toInt(b)) % 5 === rem);
+// }
+
+export function getValidComplexCandyPairs(rem: number): Item[][] {
+  return complexCandyPairs(rem).filter(([a, b]) => haveCandies(a, b));
+}
+
+export function getValidSimpleCandyPairs(rem: number): Item[][] {
+  return simpleCandyPairs(rem).filter(([a, b]) => haveCandies(a, b));
+}
+
+// export function getValidSimpleComplexCandyPairs(rem: number): Item[][] {
+//   return simpleComplexCandyPairs(rem).filter(([a, b]) => haveCandies(a, b));
+// }
+
+function synthBestPair(filteredPairs: Item[][]): void {
+  if (filteredPairs.length === 0) return;
+
+  const bestPair = filteredPairs.reduce((left, right) =>
     left.map((it) => retrievePrice(it)).reduce((acc, val) => acc + val) <
     right.map((it) => retrievePrice(it)).reduce((acc, val) => acc + val)
       ? left
@@ -456,6 +489,18 @@ export function getSynthExpBuff(): void {
   if (bestPair[0] === bestPair[1]) retrieveItem(bestPair[0], 2);
   else bestPair.forEach((it) => retrieveItem(it));
   sweetSynthesis(bestPair[0], bestPair[1]);
+}
+
+export function getSynthExpBuff(): void {
+  const filteredComplexCandyPairs = getValidComplexCandyPairs(
+    mainStat === $stat`Muscle` ? 2 : mainStat === $stat`Mysticality` ? 3 : 4,
+  );
+  synthBestPair(filteredComplexCandyPairs);
+}
+
+export function getSynthColdBuff(): void {
+  const filteredSimpleCandyPairs = getValidSimpleCandyPairs(1);
+  synthBestPair(filteredSimpleCandyPairs);
 }
 
 const allTomes = $skills`Summon Resolutions, Summon Love Song, Summon Candy Heart, Summon Taffy, Summon BRICKOs, Summon Party Favor, Summon Dice`;
@@ -646,6 +691,10 @@ export function computeCombatFrequency(): number {
   //     ? offhand
   //     : 0;
 
+  // Not considering mini kiwi for now because of the unreliable drop rate
+  // const hippyAntimilitarism =
+  //   have($familiar`Mini Kiwi`) && !excludedFamiliars.includes($familiar`Mini Kiwi`) ? -10 : 0;
+
   const effects = sumNumbers([
     rose,
     smoothMovements,
@@ -658,6 +707,7 @@ export function computeCombatFrequency(): number {
     feelingLonely,
     aprilingBandPatrolBeat,
     // offhandRemarkable,
+    // hippyAntimilitarism,
   ]);
 
   const disgeist = have($familiar`Disgeist`) ? -5 : 0;
@@ -849,4 +899,36 @@ export function canPull(id: number): boolean {
   )
     return false;
   return true;
+}
+
+let _bestShadowRift: Location | null = null;
+export function bestShadowRift(): Location {
+  if (!_bestShadowRift) {
+    _bestShadowRift =
+      chooseRift({
+        canAdventure: true,
+        sortBy: (l: Location) => {
+          const drops = getMonsters(l)
+            .map((m) =>
+              [
+                ...Object.keys(itemDrops(m)).map((s) => toItem(s)),
+                m === $monster`shadow guy` && have($skill`Just the Facts`)
+                  ? $item`pocket wish`
+                  : $item.none,
+              ].filter((i) => i !== $item.none),
+            )
+            .reduce((acc, val) => acc.concat(val), []);
+          return sum(drops, mallPrice);
+        },
+      }) ?? $location.none;
+    if (_bestShadowRift === $location.none && have($item`closed-circuit pay phone`)) {
+      throw new Error("Failed to find a suitable Shadow Rift to adventure in");
+    }
+  }
+  return _bestShadowRift;
+}
+
+export function sendAutumnaton(): void {
+  if (AutumnAton.availableLocations().includes(bestShadowRift()) && have($item`autumn-aton`))
+    AutumnAton.sendTo(bestShadowRift());
 }

@@ -12,7 +12,7 @@ import {
   effectModifier,
   equip,
   equippedItem,
-  getMonsters,
+  getWorkshed,
   haveEffect,
   haveEquipped,
   holiday,
@@ -20,12 +20,11 @@ import {
   inHardcore,
   Item,
   itemAmount,
-  itemDrops,
   Location,
-  mallPrice,
   Monster,
   mpCost,
   myBasestat,
+  myClass,
   myFamiliar,
   myHash,
   myHp,
@@ -53,6 +52,7 @@ import {
   visitUrl,
 } from "kolmafia";
 import {
+  $class,
   $coinmaster,
   $effect,
   $effects,
@@ -65,7 +65,6 @@ import {
   $skill,
   $slot,
   $stat,
-  AutumnAton,
   clamp,
   CombatLoversLocket,
   ensureEffect,
@@ -76,7 +75,6 @@ import {
   set,
   SongBoom,
   SourceTerminal,
-  sum,
   TunnelOfLove,
   uneffect,
   Witchess,
@@ -86,10 +84,12 @@ import { CombatStrategy, OutfitSpec } from "grimoire-kolmafia";
 import {
   abstractionXpEffect,
   abstractionXpItem,
+  bestShadowRift,
   burnLibram,
   canPull,
   chooseLibram,
   generalStoreXpEffect,
+  getSynthColdBuff,
   getSynthExpBuff,
   getValidComplexCandyPairs,
   haveCBBIngredients,
@@ -104,23 +104,22 @@ import {
   reagentBoosterIngredient,
   reagentBoosterItem,
   refillLatte,
+  sendAutumnaton,
   snapperXpItem,
   synthExpBuff,
   targetBaseMainStat,
   targetBaseMainStatGap,
   tryAcquiringEffect,
+  useCenser,
+  useParkaSpit,
   wishFor,
   xpWishEffect,
 } from "../lib";
-import { baseOutfit, docBag, garbageShirt, unbreakableUmbrella } from "../engine/outfit";
+import { baseOutfit, docBag, garbageShirt, unbreakableUmbrella } from "../outfit";
 import Macro, { haveFreeBanish } from "../combat";
 import { forbiddenEffects } from "../resources";
 import { mapMonster } from "libram/dist/resources/2020/Cartography";
-import {
-  chooseQuest,
-  chooseRift,
-  rufusTarget,
-} from "libram/dist/resources/2023/ClosedCircuitPayphone";
+import { chooseQuest, rufusTarget } from "libram/dist/resources/2023/ClosedCircuitPayphone";
 
 const useCinch = !get("instant_saveCinch", false);
 const baseBoozes = $items`bottle of rum, boxed wine, bottle of gin, bottle of vodka, bottle of tequila, bottle of whiskey`;
@@ -394,7 +393,9 @@ export const LevelingQuest: Quest = {
         !have($skill`Sweet Synthesis`) ||
         get("instant_skipSynthExp", false) ||
         have(synthExpBuff) ||
-        getValidComplexCandyPairs().length === 0,
+        getValidComplexCandyPairs(
+          mainStat === $stat`Muscle` ? 2 : mainStat === $stat`Mysticality` ? 3 : 4,
+        ).length === 0,
       do: (): void => getSynthExpBuff(),
       limit: { tries: 5 },
     },
@@ -584,6 +585,73 @@ export const LevelingQuest: Quest = {
       outfit: { modifier: "myst, mp, -tie" },
     },
     {
+      name: "Sept-ember Mouthwash",
+      ready: () => getWorkshed() !== $item`model train set` || have($effect`Hot Soupy Garbage`),
+      completed: () => !useCenser || have($item`bembershoot`),
+      prepare: (): void => {
+        // Ready to Survive gives +1 cold res
+        if (have($item`MayDay™ supply package`) && !get("instant_saveMayday", false))
+          use($item`MayDay™ supply package`, 1);
+        if (have($item`space blanket`)) autosell($item`space blanket`, 1);
+
+        // Synth gives +9 cold res
+        if (!get("instant_skipSynthCold", false)) getSynthColdBuff();
+
+        // +9 cold res from this Lucky! effect
+        if (
+          !forbiddenEffects.includes($effect`Fever From the Flavor`) &&
+          !get("instant_saveMonkeysPaw", false)
+        ) {
+          wishFor($effect`Fever From the Flavor`, false);
+        }
+
+        restoreMp(50);
+        const usefulEffects: Effect[] = [
+          $effect`Frosty Hand`, // +5 cold res from Cargo Shorts
+          $effect`Rainbowolin`, // +4 cold res from Pillkeeper
+          $effect`Cold as Nice`, // +3 cold res from Beach Comb
+          $effect`Egged On`, // +3 cold res from Rockin' Robin's drop
+          $effect`Scarysauce`, // +2 cold res
+          $effect`Elemental Saucesphere`, // +2 cold res
+          $effect`Feeling Peaceful`, // +2 cold res from Emotion Chip
+          $effect`Astral Shell`, // +1 cold res
+        ];
+        usefulEffects.forEach((ef) => tryAcquiringEffect(ef, true));
+      },
+      do: (): void => {
+        // Grab Embers
+        visitUrl("shop.php?whichshop=september");
+
+        // If we can get the Fireproof Foam Suit, we probably don't need the Rainbow Vaccine for the hot test
+        if (
+          have($item`Fourth of May Cosplay Saber`) &&
+          have($item`industrial fire extinguisher`) &&
+          have($skill`Double-Fisted Skull Smashing`)
+        )
+          tryAcquiringEffect($effect`Rainbow Vaccine`);
+
+        // Grab Bembershoots
+        const bembershootQty = get("instant_skipBembershootForJacket", false) ? 2 : 3;
+        visitUrl(
+          `shop.php?whichshop=september&action=buyitem&quantity=${bembershootQty}&whichrow=1516&pwd`,
+        );
+
+        // Grab Mouthwashes
+        visitUrl("shop.php?whichshop=september&action=buyitem&quantity=2&whichrow=1512&pwd");
+
+        cliExecute("maximize cold res");
+        use($item`Mmm-brr! brand mouthwash`, 2);
+      },
+      limit: { tries: 1 },
+      outfit: {
+        modifier: "cold res",
+        familiar: $familiar`Exotic Parrot`,
+      },
+      post: (): void => {
+        if (have($effect`Scarysauce`)) cliExecute("shrug scarysauce");
+      },
+    },
+    {
       name: "Alice Army",
       completed: () => get("grimoire3Summons") > 0 || !have($skill`Summon Alice's Army Cards`),
       do: () => useSkill($skill`Summon Alice's Army Cards`),
@@ -732,10 +800,14 @@ export const LevelingQuest: Quest = {
         get("_mayamSymbolsUsed").includes("yam4") ||
         !have($item`Mayam Calendar`),
       do: (): void => {
-        const sym1 = mainStat === $stat`Muscle` ? "sword" : "vessel";
-        const sym2 = mainStat === $stat`Mysticality` ? "lightning" : "meat";
-        const sym3 = mainStat === $stat`Moxie` ? "eyepatch" : "cheese";
-        cliExecute(`mayam rings ${sym1} ${sym2} ${sym3} yam`);
+        if (useCenser) {
+          cliExecute("mayam rings fur yam wall yam");
+        } else {
+          const sym1 = mainStat === $stat`Muscle` ? "sword" : "vessel";
+          const sym2 = mainStat === $stat`Mysticality` ? "lightning" : "meat";
+          const sym3 = mainStat === $stat`Moxie` ? "eyepatch" : "cheese";
+          cliExecute(`mayam rings ${sym1} ${sym2} ${sym3} yam`);
+        }
       },
       limit: { tries: 1 },
     },
@@ -900,6 +972,16 @@ export const LevelingQuest: Quest = {
           if (myMeat() < 250) throw new Error("Insufficient Meat to purchase blue rocket!");
           buy($item`blue rocket`, 1);
         }
+
+        if (
+          myClass() === $class`Pastamancer` &&
+          have($item`Sept-Ember Censer`) &&
+          have($item`Daylight Shavings Helmet`) &&
+          get("lastBeardBuff") === 0 && // We have not gotten the beard buff yet
+          !get("instant_saveEmbers", false) &&
+          !have($item`bembershoot`) // We have not used the mouthwash yet
+        )
+          equip($slot`hat`, $item`Daylight Shavings Helmet`); // Grab Grizzly Beard for mouthwash
       },
       completed: () =>
         have($item`Rufus's shadow lodestone`) ||
@@ -970,6 +1052,16 @@ export const LevelingQuest: Quest = {
         }
         unbreakableUmbrella();
         restoreMp(50);
+
+        if (
+          myClass() === $class`Pastamancer` &&
+          have($item`Sept-Ember Censer`) &&
+          have($item`Daylight Shavings Helmet`) &&
+          get("lastBeardBuff") === 0 && // We have not gotten the beard buff yet
+          !get("instant_saveEmbers", false) &&
+          !have($item`bembershoot`) // We have not used the mouthwash yet
+        )
+          equip($slot`hat`, $item`Daylight Shavings Helmet`); // Grab Grizzly Beard for mouthwash
       },
       completed: () => get("_snojoFreeFights") >= 10 || !get("snojoAvailable"),
       do: $location`The X-32-F Combat Training Snowman`,
@@ -995,6 +1087,16 @@ export const LevelingQuest: Quest = {
         if (have($item`Lil' Doctor™ bag`) && get("_otoscopeUsed") < 3)
           equip($slot`acc3`, $item`Lil' Doctor™ bag`);
         restoreMp(50);
+
+        if (
+          myClass() === $class`Pastamancer` &&
+          have($item`Sept-Ember Censer`) &&
+          have($item`Daylight Shavings Helmet`) &&
+          get("lastBeardBuff") === 0 && // We have not gotten the beard buff yet
+          !get("instant_saveEmbers", false) &&
+          !have($item`bembershoot`) // We have not used the mouthwash yet
+        )
+          equip($slot`hat`, $item`Daylight Shavings Helmet`); // Grab Grizzly Beard for mouthwash
       },
       completed: () =>
         get("_leafMonstersFought") >= 5 ||
@@ -1021,6 +1123,16 @@ export const LevelingQuest: Quest = {
         restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
         unbreakableUmbrella();
         restoreMp(50);
+
+        if (
+          myClass() === $class`Pastamancer` &&
+          have($item`Sept-Ember Censer`) &&
+          have($item`Daylight Shavings Helmet`) &&
+          get("lastBeardBuff") === 0 && // We have not gotten the beard buff yet
+          !get("instant_saveEmbers", false) &&
+          !have($item`bembershoot`) // We have not used the mouthwash yet
+        )
+          equip($slot`hat`, $item`Daylight Shavings Helmet`); // Grab Grizzly Beard for mouthwash
       },
       completed: () => get("_snokebombUsed") >= 3 - get("instant_saveSBForInnerElf", 0),
       do: powerlevelingLocation(),
@@ -1057,19 +1169,40 @@ export const LevelingQuest: Quest = {
         (have($skill`Feel Envy`) && get("_feelEnvyUsed") < 3),
       prepare: (): void => {
         restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
-        if (!have($item`yellow rocket`) && !have($effect`Everything Looks Yellow`)) {
+        if (useParkaSpit) {
+          cliExecute("parka dilophosaur");
+        } else if (!have($item`yellow rocket`) && !have($effect`Everything Looks Yellow`)) {
           if (myMeat() < 250) throw new Error("Insufficient Meat to purchase yellow rocket!");
           buy($item`yellow rocket`, 1);
         }
-        unbreakableUmbrella();
+        if (have($item`Roman Candelabra`) && !have($effect`Everything Looks Yellow`)) {
+          equip($slot`offhand`, $item`Roman Candelabra`);
+        } else {
+          unbreakableUmbrella();
+        }
+
+        if (
+          myClass() === $class`Pastamancer` &&
+          have($item`Sept-Ember Censer`) &&
+          have($item`Daylight Shavings Helmet`) &&
+          get("lastBeardBuff") === 0 && // We have not gotten the beard buff yet
+          !get("instant_saveEmbers", false) &&
+          !have($item`bembershoot`) // We have not used the mouthwash yet
+        )
+          equip($slot`hat`, $item`Daylight Shavings Helmet`); // Grab Grizzly Beard for mouthwash
       },
       completed: () =>
         CombatLoversLocket.monstersReminisced().includes($monster`red skeleton`) ||
         !CombatLoversLocket.availableLocketMonsters().includes($monster`red skeleton`) ||
         get("instant_saveLocketRedSkeleton", false),
       do: () => CombatLoversLocket.reminisce($monster`red skeleton`),
-      combat: new CombatStrategy().macro(
-        Macro.if_("!haseffect Everything Looks Yellow", Macro.tryItem($item`yellow rocket`))
+      combat: new CombatStrategy().macro(() =>
+        Macro.if_(
+          "!haseffect Everything Looks Yellow",
+          Macro.externalIf(useParkaSpit, Macro.trySkill($skill`Spit jurassic acid`))
+            .trySkill($skill`Blow the Yellow Candle!`)
+            .tryItem($item`yellow rocket`),
+        )
           .trySkill($skill`Feel Envy`)
           .default(),
       ),
@@ -1399,7 +1532,11 @@ export const LevelingQuest: Quest = {
       name: "Witchess Bishop",
       prepare: (): void => {
         restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
-        unbreakableUmbrella();
+        if (have($item`Roman Candelabra`) && !have($effect`Everything Looks Purple`)) {
+          equip($slot`offhand`, $item`Roman Candelabra`);
+        } else {
+          unbreakableUmbrella();
+        }
         usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
         restoreMp(50);
       },
@@ -1407,7 +1544,10 @@ export const LevelingQuest: Quest = {
         get("_witchessFights") >= 4 - (get("instant_skipBishopsForRoyalty", false) ? 2 : 0) ||
         !Witchess.have() ||
         get("instant_saveWitchess", false),
-      do: () => Witchess.fightPiece($monster`Witchess Bishop`),
+      do: (): void => {
+        Witchess.fightPiece($monster`Witchess Bishop`);
+        visitUrl("main.php");
+      },
       combat: new CombatStrategy().macro(() =>
         Macro.externalIf(
           get("_monsterHabitatsFightsLeft") <= 1 &&
@@ -1416,10 +1556,13 @@ export const LevelingQuest: Quest = {
             (haveFreeBanish() ||
               Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
           Macro.trySkill($skill`Recall Facts: Monster Habitats`),
-        ).default(useCinch),
+        )
+          .trySkill($skill`Blow the Purple Candle!`)
+          .default(useCinch),
       ),
       outfit: baseOutfit,
       post: (): void => {
+        visitUrl("main.php");
         sendAutumnaton();
         sellMiscellaneousItems();
       },
@@ -1577,6 +1720,16 @@ export const LevelingQuest: Quest = {
     },
     {
       name: "Mimic Sausage Goblins",
+      prepare: (): void => {
+        restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
+        if (have($item`Roman Candelabra`) && !have($effect`Everything Looks Purple`)) {
+          equip($slot`offhand`, $item`Roman Candelabra`);
+        } else {
+          unbreakableUmbrella();
+        }
+        usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
+        restoreMp(50);
+      },
       completed: () =>
         get("instant_saveMimicEggs", false) ||
         get("_mimicEggsObtained") > 0 ||
@@ -1600,6 +1753,7 @@ export const LevelingQuest: Quest = {
         visitUrl(`choice.php?pwd&whichchoice=1517&mid=${$monster`sausage goblin`.id}&option=2`);
         useFamiliar(currentFamiliar);
         visitUrl(`choice.php?pwd&whichchoice=1516&mid=${$monster`sausage goblin`.id}&option=1`);
+        visitUrl("main.php");
       },
       combat: new CombatStrategy().macro(() =>
         Macro.externalIf(
@@ -1609,10 +1763,13 @@ export const LevelingQuest: Quest = {
             (haveFreeBanish() ||
               Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
           Macro.trySkill($skill`Recall Facts: Monster Habitats`),
-        ).default(useCinch),
+        )
+          .trySkill($skill`Blow the Purple Candle!`)
+          .default(useCinch),
       ),
       outfit: baseOutfit,
       post: (): void => {
+        visitUrl("main.php");
         sendAutumnaton();
         sellMiscellaneousItems();
       },
@@ -1635,6 +1792,16 @@ export const LevelingQuest: Quest = {
     },
     {
       name: "Mimic Sausage Goblins",
+      prepare: (): void => {
+        restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
+        if (have($item`Roman Candelabra`) && !have($effect`Everything Looks Purple`)) {
+          equip($slot`offhand`, $item`Roman Candelabra`);
+        } else {
+          unbreakableUmbrella();
+        }
+        usefulEffects.forEach((ef) => tryAcquiringEffect(ef));
+        restoreMp(50);
+      },
       completed: () =>
         get("instant_saveMimicEggs", false) ||
         get("_mimicEggsObtained") > 0 ||
@@ -1658,6 +1825,7 @@ export const LevelingQuest: Quest = {
         visitUrl(`choice.php?pwd&whichchoice=1517&mid=${$monster`sausage goblin`.id}&option=2`);
         useFamiliar(currentFamiliar);
         visitUrl(`choice.php?pwd&whichchoice=1516&mid=${$monster`sausage goblin`.id}&option=1`);
+        visitUrl("main.php");
       },
       combat: new CombatStrategy().macro(() =>
         Macro.externalIf(
@@ -1667,10 +1835,13 @@ export const LevelingQuest: Quest = {
             (haveFreeBanish() ||
               Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
           Macro.trySkill($skill`Recall Facts: Monster Habitats`),
-        ).default(useCinch),
+        )
+          .trySkill($skill`Blow the Purple Candle!`)
+          .default(useCinch),
       ),
       outfit: baseOutfit,
       post: (): void => {
+        visitUrl("main.php");
         sendAutumnaton();
         sellMiscellaneousItems();
       },
@@ -1694,7 +1865,12 @@ export const LevelingQuest: Quest = {
         !Witchess.have() ||
         get("instant_saveWitchess", false),
       do: () => Witchess.fightPiece($monster`Witchess King`),
-      combat: new CombatStrategy().macro(Macro.default(useCinch)),
+      combat: new CombatStrategy().macro(
+        Macro.while_(
+          `!mpbelow ${mpCost($skill`Toynado`)} && hasskill ${toInt($skill`Toynado`)}`,
+          Macro.skill($skill`Toynado`),
+        ).default(useCinch),
+      ),
       outfit: baseOutfit,
       post: (): void => {
         sendAutumnaton();
@@ -1798,7 +1974,12 @@ export const LevelingQuest: Quest = {
             (haveFreeBanish() ||
               Array.from(getBanishedMonsters().values()).includes($monster`fluffy bunny`)),
           Macro.trySkill($skill`Recall Facts: Monster Habitats`),
-        ).default(useCinch),
+        )
+          .while_(
+            `!mpbelow ${mpCost($skill`Toynado`)} && hasskill ${toInt($skill`Toynado`)}`,
+            Macro.skill($skill`Toynado`),
+          )
+          .default(useCinch),
       ),
       outfit: baseOutfit,
       post: (): void => {

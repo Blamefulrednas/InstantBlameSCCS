@@ -52,8 +52,9 @@ import {
   tryAcquiringEffect,
 } from "../lib";
 import Macro, { haveFreeBanish, haveMotherSlimeBanish } from "../combat";
-import { chooseFamiliar, sugarItemsAboutToBreak } from "../engine/outfit";
+import { sugarItemsAboutToBreak } from "../outfit";
 import { forbiddenEffects } from "../resources";
+import { chooseFamiliar } from "../familiars";
 
 let triedDeepDark = false;
 const spellTestMaximizerString = "spell dmg, switch disembodied hand, -switch left-hand man";
@@ -177,15 +178,14 @@ export const SpellDamageQuest: Quest = {
         get("instant_stickKnifeOutfit") !== "" &&
         myClass() === $class`Pastamancer` &&
         have($item`Stick-Knife of Loathing`) &&
-        (have($skill`Bind Undead Elbow Macaroni`) || myThrall() === $thrall`Undead Elbow Macaroni`),
+        (have($skill`Bind Undead Elbow Macaroni`) || myThrall() === $thrall`Elbow Macaroni`),
       completed: () =>
         haveEquipped($item`Stick-Knife of Loathing`) ||
         have($familiar`Disembodied Hand`) ||
         myBasestat($stat`Mysticality`) < 150 ||
         myBasestat($stat`Muscle`) >= 150,
       do: (): void => {
-        if (myThrall() !== $thrall`Undead Elbow Macaroni`)
-          useSkill($skill`Bind Undead Elbow Macaroni`);
+        if (myThrall() !== $thrall`Elbow Macaroni`) useSkill($skill`Bind Undead Elbow Macaroni`);
         outfit(get("instant_stickKnifeOutfit"));
       },
       limit: { tries: 1 },

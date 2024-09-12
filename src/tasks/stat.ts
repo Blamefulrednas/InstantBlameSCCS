@@ -22,6 +22,7 @@ import {
   reagentBalancerEffect,
   reagentBalancerItem,
   tryAcquiringEffect,
+  useCenser,
 } from "../lib";
 import { forbiddenEffects } from "../resources";
 
@@ -50,7 +51,11 @@ export const HPQuest: Quest = {
         get("_mayamSymbolsUsed").includes("explosion") ||
         !have($item`Mayam Calendar`),
       do: (): void => {
-        cliExecute(`mayam rings eye bottle wall explosion`);
+        if (useCenser) {
+          cliExecute("mayam rings eye bottle cheese explosion");
+        } else {
+          cliExecute("mayam rings eye bottle wall explosion");
+        }
       },
       limit: { tries: 1 },
     },

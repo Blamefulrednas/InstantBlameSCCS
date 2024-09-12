@@ -11,6 +11,7 @@ import {
   use,
   useFamiliar,
   useSkill,
+  visitUrl,
 } from "kolmafia";
 import {
   $effect,
@@ -26,9 +27,10 @@ import {
   uneffect,
 } from "libram";
 import { Quest } from "../engine/task";
-import { handleCustomPulls, logTestSetup, tryAcquiringEffect, wishFor } from "../lib";
-import { chooseFamiliar, sugarItemsAboutToBreak } from "../engine/outfit";
+import { handleCustomPulls, logTestSetup, tryAcquiringEffect, useParkaSpit, wishFor } from "../lib";
+import { sugarItemsAboutToBreak } from "../outfit";
 import Macro from "../combat";
+import { chooseFamiliar } from "../familiars";
 
 const hotTestMaximizerString = "hot res";
 
@@ -39,8 +41,11 @@ export const HotResQuest: Quest = {
     {
       name: "Reminisce Factory Worker (female)",
       prepare: (): void => {
-        if (!have($item`yellow rocket`) && !have($effect`Everything Looks Yellow`))
+        if (useParkaSpit) {
+          cliExecute("parka dilophosaur");
+        } else if (!have($item`yellow rocket`) && !have($effect`Everything Looks Yellow`)) {
           buy($item`yellow rocket`, 1);
+        }
       },
       completed: () =>
         CombatLoversLocket.monstersReminisced().includes($monster`factory worker (female)`) ||
@@ -49,10 +54,11 @@ export const HotResQuest: Quest = {
       do: () => CombatLoversLocket.reminisce($monster`factory worker (female)`),
       outfit: () => ({
         back: $item`vampyric cloake`,
+        shirt: $item`Jurassic Parka`,
         weapon: $item`Fourth of May Cosplay Saber`,
         offhand: have($skill`Double-Fisted Skull Smashing`)
           ? $item`industrial fire extinguisher`
-          : undefined,
+          : $item`Roman Candelabra`,
         familiar: chooseFamiliar(false),
         modifier: "Item Drop",
         avoid: sugarItemsAboutToBreak(),
@@ -63,8 +69,13 @@ export const HotResQuest: Quest = {
           .trySkill($skill`Fire Extinguisher: Foam Yourself`)
           .trySkill($skill`Use the Force`)
           .trySkill($skill`Shocking Lick`)
-          .tryItem($item`yellow rocket`)
-          .default()
+          .if_(
+            "!haseffect Everything Looks Yellow",
+            Macro.externalIf(useParkaSpit, Macro.trySkill($skill`Spit jurassic acid`))
+              .trySkill($skill`Blow the Yellow Candle!`)
+              .tryItem($item`yellow rocket`),
+          )
+          .default(),
       ),
       limit: { tries: 1 },
     },
@@ -139,6 +150,17 @@ export const HotResQuest: Quest = {
       limit: { tries: 1 },
     },
     {
+      name: "Embers-Only Jacket",
+      completed: () =>
+        !have($item`Sept-Ember Censer`) ||
+        have($item`embers-only jacket`) ||
+        get("instant_saveEmbers", false) ||
+        have($item`bembershoot`, 3),
+      do: () =>
+        visitUrl("shop.php?whichshop=september&action=buyitem&quantity=1&whichrow=1515&pwd"), // Grab Jacket
+      limit: { tries: 1 },
+    },
+    {
       name: "Test",
       prepare: (): void => {
         cliExecute("retrocape vampire hold");
@@ -158,6 +180,7 @@ export const HotResQuest: Quest = {
           $effect`Feeling Peaceful`,
           $effect`Hot-Headed`,
           $effect`Rainbowolin`,
+          $effect`Rainbow Vaccine`,
 
           // Famwt Buffs
           $effect`Blood Bond`,
@@ -170,6 +193,15 @@ export const HotResQuest: Quest = {
         if (have($item`scroll of minor invulnerability`)) {
           use($item`scroll of minor invulnerability`);
         }
+        if (
+          CommunityService.HotRes.actualCost() >= 4 &&
+          (have($item`mini kiwi`, 3) || have($item`mini kiwi illicit antibiotic`))
+        ) {
+          if (!have($item`mini kiwi illicit antibiotic`) && !have($effect`Incredibly Healthy`))
+            create($item`mini kiwi illicit antibiotic`, 1);
+          tryAcquiringEffect($effect`Incredibly Healthy`);
+        }
+
         // If it saves us >= 6 turns, try using a wish
         if (CommunityService.HotRes.actualCost() >= 7) wishFor($effect`Fireproof Lips`);
 

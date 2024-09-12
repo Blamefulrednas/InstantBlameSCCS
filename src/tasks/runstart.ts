@@ -73,21 +73,16 @@ import {
   mainStat,
   mainStatMaximizerStr,
   mainStatStr,
+  sendAutumnaton,
   tryAcquiringEffect,
+  useCenser,
+  useParkaSpit,
 } from "../lib";
 import Macro from "../combat";
 import { mapMonster } from "libram/dist/resources/2020/Cartography";
-import {
-  baseOutfit,
-  chooseFamiliar,
-  cookbookbat,
-  melodramedary,
-  sombrero,
-  unbreakableUmbrella,
-} from "../engine/outfit";
+import { baseOutfit, unbreakableUmbrella } from "../outfit";
 import { excludedFamiliars } from "../resources";
-
-const useParkaSpit = have($item`Fourth of May Cosplay Saber`) && have($skill`Feel Envy`);
+import { chooseFamiliar, cookbookbat, melodramedary, sombrero } from "../familiars";
 
 export const RunStartQuest: Quest = {
   name: "Run Start",
@@ -486,7 +481,9 @@ export const RunStartQuest: Quest = {
           statStation, // main stats
           Station.VIEWING_PLATFORM, // all stats
           Station.WATER_BRIDGE, // +ML
-          Station.TRACKSIDE_DINER, // candies (we don't get items during free banishes)
+          have($item`Sept-Ember Censer`) && !get("instant_saveEmbers", false)
+            ? Station.TOWER_SEWAGE // cold res for mouthwash
+            : Station.CANDY_FACTORY, // candies (we don't get items during free banishes)
         ]);
       },
       limit: { tries: 1 },
@@ -578,7 +575,10 @@ export const RunStartQuest: Quest = {
           .filter(
             ([it]) =>
               !have(it) && // Remove option if we already have the item
-              !get(`instant_save${it.name.replace(/( \w)/, (_, g) => g.toUpperCase())}`, false) // or if we chose to not acquire it
+              !get(
+                `instant_save${it.name.replace(/(\s)(\w)/g, (_1, _2, g) => g.toUpperCase())}`,
+                false,
+              ), // or if we chose to not acquire it
           )
           .sort(([, a], [, b]) => b - a) // Sort the instruments in decreasing priority value (the higher the better)
           .slice(0, 2 - get("_aprilBandInstruments")) // We can acquire at most 2 instruments
@@ -596,22 +596,26 @@ export const RunStartQuest: Quest = {
         get("_mayamSymbolsUsed").includes("clock") ||
         !have($item`Mayam Calendar`),
       do: (): void => {
-        if (
-          have($familiar`Chest Mimic`) &&
-          !excludedFamiliars.includes(toInt($familiar`Chest Mimic`)) &&
-          !get("instant_saveMimicEggs", false)
-        ) {
-          useFamiliar($familiar`Chest Mimic`);
-        } else if (sombrero() !== $familiar.none) {
-          useFamiliar(sombrero());
+        if (useCenser) {
+          cliExecute(`mayam rings chair meat yam clock`);
         } else {
-          // Choose a potentially useful familiar
-          const potentialFamiliars =
-            $familiars`Comma Chameleon, Mini-Trainbot, Exotic Parrot`.filter(have);
-          useFamiliar(potentialFamiliars.at(0) ?? chooseFamiliar());
+          if (
+            have($familiar`Chest Mimic`) &&
+            !excludedFamiliars.includes(toInt($familiar`Chest Mimic`)) &&
+            !get("instant_saveMimicEggs", false)
+          ) {
+            useFamiliar($familiar`Chest Mimic`);
+          } else if (sombrero() !== $familiar.none) {
+            useFamiliar(sombrero());
+          } else {
+            // Choose a potentially useful familiar
+            const potentialFamiliars =
+              $familiars`Comma Chameleon, Mini-Trainbot, Exotic Parrot`.filter(have);
+            useFamiliar(potentialFamiliars.at(0) ?? chooseFamiliar());
+          }
+          const sym2 = mainStat === $stat`Mysticality` ? "meat" : "yam";
+          cliExecute(`mayam rings fur ${sym2} yam clock`);
         }
-        const sym2 = mainStat === $stat`Mysticality` ? "meat" : "yam";
-        cliExecute(`mayam rings fur ${sym2} yam clock`);
       },
       limit: { tries: 1 },
     },
@@ -669,19 +673,25 @@ export const RunStartQuest: Quest = {
         visitUrl(`choice.php?pwd&whichchoice=1516&mid=${$monster`Evil Olive`.id}&option=1`);
       },
       combat: new CombatStrategy().macro(
-        (useParkaSpit ? Macro.trySkill($skill`Spit jurassic acid`) : new Macro())
-          .tryItem($item`yellow rocket`)
-          .abort()
+        Macro.if_(
+          "!haseffect Everything Looks Yellow",
+          Macro.externalIf(useParkaSpit, Macro.trySkill($skill`Spit jurassic acid`))
+            .trySkill($skill`Blow the Yellow Candle!`)
+            .tryItem($item`yellow rocket`),
+        ).abort(),
       ),
       outfit: () => ({
         ...baseOutfit(false),
         shirt: useParkaSpit ? $item`Jurassic Parka` : undefined,
+        offhand: $item`Roman Candelabra`,
         modifier: `${baseOutfit().modifier}, -equip miniature crystal ball`,
       }),
       post: (): void => {
-        if (have($item`MayDay™ supply package`) && !get("instant_saveMayday", false))
-          use($item`MayDay™ supply package`, 1);
-        if (have($item`space blanket`)) autosell($item`space blanket`, 1);
+        if (!useCenser) {
+          if (have($item`MayDay™ supply package`) && !get("instant_saveMayday", false))
+            use($item`MayDay™ supply package`, 1);
+          if (have($item`space blanket`)) autosell($item`space blanket`, 1);
+        }
       },
       limit: { tries: 1 },
     },
@@ -704,13 +714,17 @@ export const RunStartQuest: Quest = {
         have($item`jumbo olive`),
       do: () => CombatLoversLocket.reminisce($monster`Evil Olive`),
       combat: new CombatStrategy().macro(
-        (useParkaSpit ? Macro.trySkill($skill`Spit jurassic acid`) : new Macro())
-          .tryItem($item`yellow rocket`)
-          .abort()
+        Macro.if_(
+          "!haseffect Everything Looks Yellow",
+          Macro.externalIf(useParkaSpit, Macro.trySkill($skill`Spit jurassic acid`))
+            .trySkill($skill`Blow the Yellow Candle!`)
+            .tryItem($item`yellow rocket`),
+        ).abort(),
       ),
       outfit: () => ({
         ...baseOutfit(false),
         shirt: useParkaSpit ? $item`Jurassic Parka` : undefined,
+        offhand: $item`Roman Candelabra`,
         modifier: `${baseOutfit().modifier}, -equip miniature crystal ball`,
       }),
       post: (): void => {
@@ -749,18 +763,20 @@ export const RunStartQuest: Quest = {
       do: () => mapMonster($location`The Skeleton Store`, $monster`novelty tropical skeleton`),
       combat: new CombatStrategy().macro(
         Macro.if_(
-          $monster`novelty tropical skeleton`,
-          (useParkaSpit ? Macro.trySkill($skill`Spit jurassic acid`) : new Macro()).tryItem(
-            $item`yellow rocket`
-          )
-        ).abort()
+          "!haseffect Everything Looks Yellow",
+          Macro.if_(
+            $monster`novelty tropical skeleton`,
+            Macro.externalIf(useParkaSpit, Macro.trySkill($skill`Spit jurassic acid`))
+              .trySkill($skill`Blow the Yellow Candle!`)
+              .tryItem($item`yellow rocket`),
+          ),
+        ).abort(),
       ),
       outfit: () => ({
         ...baseOutfit(false),
         shirt: useParkaSpit ? $item`Jurassic Parka` : undefined,
-        modifier: `${
-          baseOutfit().modifier
-        }, -equip miniature crystal ball, -equip Kramco Sausage-o-Matic™`,
+        offhand: $item`Roman Candelabra`,
+        modifier: `${baseOutfit().modifier}, -equip miniature crystal ball, -equip Kramco Sausage-o-Matic™`,
       }),
       post: (): void => {
         if (have($item`MayDay™ supply package`) && !get("instant_saveMayday", false))
@@ -778,7 +794,11 @@ export const RunStartQuest: Quest = {
           if (myMeat() < 250) throw new Error("Insufficient Meat to purchase yellow rocket!");
           buy($item`yellow rocket`, 1);
         }
-        unbreakableUmbrella();
+        if (have($item`Roman Candelabra`) && !have($effect`Everything Looks Yellow`)) {
+          equip($slot`offhand`, $item`Roman Candelabra`);
+        } else {
+          unbreakableUmbrella();
+        }
         if (get("_snokebombUsed") === 0) restoreMp(50);
         if (haveEquipped($item`miniature crystal ball`)) equip($slot`familiar`, $item.none);
       },
@@ -792,10 +812,13 @@ export const RunStartQuest: Quest = {
       do: $location`The Skeleton Store`,
       combat: new CombatStrategy().macro(() =>
         Macro.if_(
-          $monster`novelty tropical skeleton`,
-          (useParkaSpit ? Macro.trySkill($skill`Spit jurassic acid`) : new Macro()).tryItem(
-            $item`yellow rocket`
-          )
+          "!haseffect Everything Looks Yellow",
+          Macro.if_(
+            $monster`novelty tropical skeleton`,
+            Macro.externalIf(useParkaSpit, Macro.trySkill($skill`Spit jurassic acid`))
+              .trySkill($skill`Blow the Yellow Candle!`)
+              .tryItem($item`yellow rocket`),
+          ),
         )
           .externalIf(
             !Array.from(getBanishedMonsters().keys()).includes($skill`Bowl a Curveball`),
@@ -818,7 +841,6 @@ export const RunStartQuest: Quest = {
       outfit: (): OutfitSpec => {
         return {
           shirt: useParkaSpit ? $item`Jurassic Parka` : undefined,
-          offhand: $item`unbreakable umbrella`,
           acc2: $item`cursed monkey's paw`,
           familiar: chooseFamiliar(false),
           modifier: `${
@@ -872,15 +894,58 @@ export const RunStartQuest: Quest = {
       prepare: (): void => {
         restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
         restoreMp(50);
+        if (
+          have($familiar`Left-Hand Man`) &&
+          have($item`Roman Candelabra`) &&
+          !have($effect`Everything Looks Purple`)
+        ) {
+          useFamiliar($familiar`Left-Hand Man`);
+          equip($slot`familiar`, $item`Roman Candelabra`);
+        }
       },
       ready: () => getKramcoWandererChance() >= 1.0,
       completed: () => getKramcoWandererChance() < 1.0 || !have($item`Kramco Sausage-o-Matic™`),
-      do: $location`Noob Cave`,
+      do: (): void => {
+        adv1($location`Noob Cave`);
+        visitUrl("main.php");
+      },
       outfit: () => ({
         ...baseOutfit(),
         offhand: $item`Kramco Sausage-o-Matic™`,
       }),
-      combat: new CombatStrategy().macro(Macro.default()),
+      post: (): void => {
+        visitUrl("main.php");
+      },
+      combat: new CombatStrategy().macro(Macro.trySkill($skill`Blow the Purple Candle!`).default()),
+    },
+    {
+      name: "Eldritch Tentacle + ELP",
+      prepare: (): void => {
+        restoreHp(clamp(1000, myMaxhp() / 2, myMaxhp()));
+        restoreMp(50);
+      },
+      completed: () =>
+        get("_eldritchHorrorEvoked") ||
+        !have($skill`Evoke Eldritch Horror`) ||
+        !have($item`Roman Candelabra`) ||
+        have($effect`Everything Looks Purple`),
+      do: (): void => {
+        useSkill($skill`Evoke Eldritch Horror`);
+        visitUrl("main.php");
+      },
+      post: (): void => {
+        visitUrl("main.php");
+        if (have($effect`Beaten Up`)) cliExecute("hottub");
+        sendAutumnaton();
+      },
+      combat: new CombatStrategy().macro(
+        Macro.trySkill($skill`Blow the Purple Candle!`).default(!get("instant_saveCinch", false)),
+      ),
+      outfit: () => ({
+        ...baseOutfit(),
+        offhand: $item`Roman Candelabra`,
+      }),
+      limit: { tries: 1 },
     },
   ],
 };

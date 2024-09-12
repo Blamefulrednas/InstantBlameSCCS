@@ -75,6 +75,7 @@ const consumptionResources: Resource[] = [
     $effects`Hulkien, Rainbowolin, Fidoxene`,
   ),
   new Resource("instant_skipSynthExp", "Do not use synth for the Xp% buff"),
+  new Resource("instant_skipSynthCold", "Do not use synth for the Cold Res buff"),
   new Resource(
     "instant_saveBodySpradium",
     "Do not chew the body spradium if we have it",
@@ -212,6 +213,11 @@ const farmingResources: Resource[] = [
   new Resource("instant_saveAprilingBandSaxophone", "Do not acquire the Apriling Band Saxophone"),
   new Resource("instant_saveAprilingBandStaff", "Do not acquire the Apriling Band Staff"),
   new Resource("instant_saveAprilingBandPiccolo", "Do not acquire the Apriling Band Piccolo"),
+  new Resource("instant_saveEmbers", "Do not use any Sept-Ember Censer Embers"),
+  new Resource(
+    "instant_skipBembershootForJacket",
+    "Acquire 2 bembershoots and 1 jacket instead of 3 bembershoots",
+  ),
 ];
 
 const otherResources: Resource[] = [
