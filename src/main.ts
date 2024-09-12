@@ -44,7 +44,6 @@ export const args = Args.create("BlameSCCS", "An automated low-shiny SCCS script
 
 export function main(command?: string): void {
   sinceKolmafiaRevision(27930);
-  checkGithubVersion();
 
   Args.fill(args, command);
   if (args.help) {
