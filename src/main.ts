@@ -30,7 +30,7 @@ import { checkResources } from "./resources";
 
 const timeProperty = "fullday_elapsedTime";
 
-export const args = Args.create("BlameSCCS", "An automated low-shiny SCCS script.", {
+export const args = Args.create("instantSCCS", "An automated low-shiny SCCS script.", {
   confirm: Args.boolean({
     help: "If the user must confirm execution of each task.",
     default: false,
@@ -88,8 +88,8 @@ export function main(command?: string): void {
     MoxieQuest,
     MuscleQuest,
     swapFamAndNCTests ? NoncombatQuest : FamiliarWeightQuest,
-    swapFamAndNCTests ? FamiliarWeightQuest : NoncombatQuest,
     BoozeDropQuest,
+    swapFamAndNCTests ? FamiliarWeightQuest : NoncombatQuest,
     HotResQuest,
     WeaponDamageQuest,
     SpellDamageQuest,
